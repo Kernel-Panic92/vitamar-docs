@@ -1,0 +1,7 @@
+node_modules/
+.env
+uploads/facturas/*.pdf
+uploads/facturas/*.xml
+*.log
+.DS_Store
+dist/
