@@ -122,22 +122,56 @@ router.post('/login', loginRateLimit, async (req, res) => {
     const usuario = rows[0];
     if (!usuario) {
       loginRegisterFail(req._loginIp);
+      db.query(
+        `INSERT INTO log_accesos (email, ip, user_agent, exito, motivo) VALUES ($1, $2, $3, FALSE, 'Usuario no encontrado')`,
+        [email.toLowerCase().trim(), req._loginIp, req.headers['user-agent'] || null]
+      ).catch(() => {});
       return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
 
     const ok = await bcrypt.compare(password, usuario.password_hash);
     if (!ok) {
       loginRegisterFail(req._loginIp);
+      db.query(
+        `INSERT INTO log_accesos (usuario_id, email, ip, user_agent, exito, motivo) VALUES ($1, $2, $3, $4, FALSE, 'Contraseña incorrecta')`,
+        [usuario.id, email.toLowerCase().trim(), req._loginIp, req.headers['user-agent'] || null]
+      ).catch(() => {});
       return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
 
     loginRegisterSuccess(req._loginIp);
+
+    // Log acceso exitoso
+    db.query(
+      `INSERT INTO log_accesos (usuario_id, email, ip, user_agent, exito) VALUES ($1, $2, $3, $4, TRUE)`,
+      [usuario.id, usuario.email, req._loginIp, req.headers['user-agent'] || null]
+    ).catch(() => {});
 
     // Actualizar último acceso
     await db.query(
       'UPDATE usuarios SET ultimo_acceso = NOW() WHERE id = $1',
       [usuario.id]
     );
+
+    // Cargar categorías permitidas del usuario
+    let categoriasPermitidas = [];
+    if (usuario.area_id) {
+      // Categorías del área del usuario
+      const catsArea = await db.query(
+        `SELECT DISTINCT c.id FROM categorias_compra c
+         JOIN categoria_area ca ON ca.categoria_id = c.id
+         WHERE ca.area_id = $1 AND c.activo = TRUE`,
+        [usuario.area_id]
+      );
+      categoriasPermitidas = catsArea.rows.map(r => r.id);
+    }
+    // Agregar categorías asignadas explícitamente
+    const catsExtras = await db.query(
+      `SELECT categoria_id FROM categorias_usuario WHERE usuario_id = $1`,
+      [usuario.id]
+    );
+    const catsExtraIds = catsExtras.rows.map(r => r.categoria_id);
+    categoriasPermitidas = [...new Set([...categoriasPermitidas, ...catsExtraIds])];
 
     const payload = {
       id:          usuario.id,
@@ -146,6 +180,7 @@ router.post('/login', loginRateLimit, async (req, res) => {
       rol:         usuario.rol,
       area_id:     usuario.area_id,
       area_nombre: usuario.area_nombre,
+      categorias:  categoriasPermitidas,
     };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, {

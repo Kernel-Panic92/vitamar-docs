@@ -42,30 +42,189 @@ async function registrarEvento(client, facturaId, usuarioId, tipo, comentario = 
   );
 }
 
+// ─── Helper: construir filtro de categorías por usuario ───────────────────────
+function construirFiltroCategorias(usuario) {
+  const { rol, area_id, categorias } = usuario;
+  
+  // Admin y contador ven todo
+  if (['admin', 'contador', 'auditor'].includes(rol)) {
+    return null; // Sin filtro
+  }
+  
+  // Si tiene categorías explícitamente asignadas
+  if (categorias && Array.isArray(categorias) && categorias.length > 0) {
+    return categorias;
+  }
+  
+  // Si tiene área, obtener categorías del área
+  if (area_id) {
+    return 'AREA'; // Flag especial para indicar que se filtrará por área
+  }
+  
+  // Si no tiene nada, no ve facturas (devuelve array vacío)
+  return [];
+}
+
+// ─── GET /api/facturas/pendientes ─────────────────────────────────────────────
+router.get('/pendientes', async (req, res) => {
+  try {
+    const hoy = new Date();
+    const en3dias = new Date(hoy.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const en7dias = new Date(hoy.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const hace7dias = new Date(hoy.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const { rows } = await db.query(
+      `SELECT f.*,
+        p.nombre AS proveedor_nombre, p.nit AS proveedor_nit,
+        c.nombre AS categoria_nombre, c.color AS categoria_color,
+        a.nombre AS area_nombre,
+        CASE 
+          WHEN f.limite_dian <= $2 THEN 'critico'
+          WHEN f.limite_dian <= $3 THEN 'alerta'
+          WHEN f.estado = 'causada' AND f.soporte_pago IS NULL THEN 'alerta'
+          WHEN f.estado = 'revision' AND f.recibida_en < $4 THEN 'alerta'
+          ELSE 'normal'
+        END AS prioridad,
+        CASE
+          WHEN f.limite_dian IS NOT NULL THEN 'dian'
+          WHEN f.estado = 'causada' AND f.soporte_pago IS NULL THEN 'soporte'
+          WHEN f.estado = 'revision' THEN 'revision'
+          ELSE 'normal'
+        END AS tipo_urgencia
+       FROM facturas f
+       LEFT JOIN proveedores p ON p.id = f.proveedor_id
+       LEFT JOIN categorias_compra c ON c.id = f.categoria_id
+       LEFT JOIN areas a ON a.id = f.area_responsable_id
+       WHERE (
+         (f.limite_dian IS NOT NULL AND f.limite_dian <= $3 AND f.limite_dian >= $1 AND f.estado IN ('recibida', 'revision'))
+         OR
+         (f.estado = 'causada' AND f.soporte_pago IS NULL)
+         OR
+         (f.estado = 'revision' AND f.recibida_en < $4)
+       )
+       ORDER BY 
+         CASE 
+           WHEN f.limite_dian <= $2 THEN 1 
+           WHEN f.limite_dian <= $3 THEN 2 
+           WHEN f.estado = 'causada' AND f.soporte_pago IS NULL THEN 2
+           WHEN f.estado = 'revision' THEN 3 
+           ELSE 4 
+         END,
+         f.limite_dian ASC NULLS LAST
+       LIMIT 100`,
+      [hoy.toISOString(), en3dias.toISOString(), en7dias.toISOString(), hace7dias.toISOString()]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/facturas ────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
-  const { estado, area_id, categoria_id, page = 1, limit = 50 } = req.query;
+  const { 
+    estado, area_id, categoria_id, proveedor_id,
+    numero, nit_emisor, fecha_desde, fecha_hasta,
+    valor_min, valor_max,
+    buscar,
+    page = 1, limit = 50 
+  } = req.query;
+  
   const offset = (parseInt(page) - 1) * parseInt(limit);
   const params = [];
   const where  = ['1=1'];
 
+  // ─── FILTRO DE CATEGORÍAS POR USUARIO ───────────────────────────────────
+  const filtroCats = construirFiltroCategorias(req.usuario);
+  
+  if (filtroCats === null) {
+    // Admin/contador/auditor ven todo - sin filtro adicional
+  } else if (filtroCats.length === 0) {
+    // Usuario sin acceso a categorías - no ve facturas
+    return res.json({ data: [], total: 0, page: 1, limit: parseInt(limit) });
+  } else if (filtroCats === 'AREA') {
+    // Filtrar por categorías del área del usuario
+    where.push(`f.categoria_id IN (
+      SELECT ca.categoria_id FROM categoria_area ca 
+      WHERE ca.area_id = $${params.length + 1}
+    )`);
+    params.push(req.usuario.area_id);
+  } else {
+    // Filtrar por categorías explícitamente asignadas
+    const placeholders = filtroCats.map((_, i) => `$${params.length + 1 + i}`).join(',');
+    where.push(`f.categoria_id IN (${placeholders})`);
+    params.push(...filtroCats);
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   if (estado)      { params.push(estado);      where.push(`f.estado = $${params.length}`); }
   if (area_id)     { params.push(area_id);     where.push(`f.area_responsable_id = $${params.length}`); }
   if (categoria_id){ params.push(categoria_id); where.push(`f.categoria_id = $${params.length}`); }
+  if (proveedor_id){ params.push(proveedor_id); where.push(`f.proveedor_id = $${params.length}`); }
+  
+  // Búsqueda por número de factura
+  if (numero) {
+    params.push(`%${numero}%`);
+    where.push(`f.numero_factura ILIKE $${params.length}`);
+  }
+  
+  // Búsqueda por NIT emisor
+  if (nit_emisor) {
+    params.push(`%${nit_emisor}%`);
+    where.push(`f.nit_emisor ILIKE $${params.length}`);
+  }
+  
+  // Filtro por rango de fechas
+  if (fecha_desde) {
+    params.push(fecha_desde);
+    where.push(`f.recibida_en::date >= $${params.length}`);
+  }
+  if (fecha_hasta) {
+    params.push(fecha_hasta);
+    where.push(`f.recibida_en::date <= $${params.length}`);
+  }
+  
+  // Filtro por rango de valores
+  if (valor_min) {
+    params.push(parseFloat(valor_min));
+    where.push(`f.valor_total >= $${params.length}`);
+  }
+  if (valor_max) {
+    params.push(parseFloat(valor_max));
+    where.push(`f.valor_total <= $${params.length}`);
+  }
+  
+  // Búsqueda general
+  if (buscar) {
+    params.push(`%${buscar}%`);
+    where.push(`(
+      f.numero_factura ILIKE $${params.length} OR
+      p.nombre ILIKE $${params.length} OR
+      p.nit ILIKE $${params.length} OR
+      f.nit_emisor ILIKE $${params.length} OR
+      f.nombre_emisor ILIKE $${params.length} OR
+      f.cufe ILIKE $${params.length}
+    )`);
+  }
 
   try {
+    const countParams = [...params];
     params.push(parseInt(limit), offset);
+    
     const { rows } = await db.query(
       `SELECT f.*,
          p.nombre  AS proveedor_nombre, p.nit AS proveedor_nit,
          c.nombre  AS categoria_nombre, c.color AS categoria_color,
          a.nombre  AS area_nombre,
-         u.nombre  AS asignado_nombre
+         co.nombre AS centro_operacion_nombre,
+         u.nombre  AS asignado_nombre,
+         f.soporte_pago IS NOT NULL AS tiene_soporte
        FROM facturas f
-       LEFT JOIN proveedores       p ON p.id = f.proveedor_id
-       LEFT JOIN categorias_compra c ON c.id = f.categoria_id
-       LEFT JOIN areas             a ON a.id = f.area_responsable_id
-       LEFT JOIN usuarios          u ON u.id = f.asignado_a_id
+       LEFT JOIN proveedores         p ON p.id = f.proveedor_id
+       LEFT JOIN categorias_compra   c ON c.id = f.categoria_id
+       LEFT JOIN areas               a ON a.id = f.area_responsable_id
+       LEFT JOIN centros_operacion  co ON co.id = f.centro_operacion_id
+       LEFT JOIN usuarios            u ON u.id = f.asignado_a_id
        WHERE ${where.join(' AND ')}
        ORDER BY f.recibida_en DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -73,8 +232,10 @@ router.get('/', async (req, res) => {
     );
 
     const count = await db.query(
-      `SELECT COUNT(*)::int FROM facturas f WHERE ${where.join(' AND ')}`,
-      params.slice(0, -2)
+      `SELECT COUNT(*)::int FROM facturas f
+       LEFT JOIN proveedores p ON p.id = f.proveedor_id
+       WHERE ${where.join(' AND ')}`,
+      countParams
     );
 
     res.json({ data: rows, total: count.rows[0].count, page: parseInt(page), limit: parseInt(limit) });
@@ -91,12 +252,14 @@ router.get('/:id', async (req, res) => {
          p.nombre AS proveedor_nombre, p.nit AS proveedor_nit, p.email_facturacion,
          c.nombre AS categoria_nombre, c.color AS categoria_color, c.pasos AS categoria_pasos,
          a.nombre AS area_nombre, a.email AS area_email,
+         co.nombre AS centro_operacion_nombre,
          u.nombre AS asignado_nombre, u.email AS asignado_email
        FROM facturas f
-       LEFT JOIN proveedores       p ON p.id = f.proveedor_id
-       LEFT JOIN categorias_compra c ON c.id = f.categoria_id
-       LEFT JOIN areas             a ON a.id = f.area_responsable_id
-       LEFT JOIN usuarios          u ON u.id = f.asignado_a_id
+       LEFT JOIN proveedores         p ON p.id = f.proveedor_id
+       LEFT JOIN categorias_compra   c ON c.id = f.categoria_id
+       LEFT JOIN areas               a ON a.id = f.area_responsable_id
+       LEFT JOIN centros_operacion co ON co.id = f.centro_operacion_id
+       LEFT JOIN usuarios            u ON u.id = f.asignado_a_id
        WHERE f.id = $1`,
       [req.params.id]
     );
@@ -228,18 +391,43 @@ router.patch('/:id/centro-costos', async (req, res) => {
 
 // ─── PATCH /api/facturas/:id/aprobar ─────────────────────────────────────────
 router.patch('/:id/aprobar', async (req, res) => {
-  const { comentario } = req.body;
+  const { 
+    centro_operacion_id, area_responsable_id, centro_costos, descripcion_gasto, referencia, comentario 
+  } = req.body;
+  
+  if (!centro_operacion_id) {
+    return res.status(400).json({ error: 'El centro de operación es requerido' });
+  }
+  if (!area_responsable_id) {
+    return res.status(400).json({ error: 'El área de destino es requerida' });
+  }
+  
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
+    
+    // Actualizar datos de la factura antes de aprobar
     const { rows } = await client.query(
-      `UPDATE facturas SET estado='aprobada', aprobada_en=NOW()
-       WHERE id=$1 AND estado IN ('recibida','revision') RETURNING *`,
-      [req.params.id]
+      `UPDATE facturas SET 
+         centro_operacion_id = $1,
+         area_responsable_id = $2,
+         centro_costos = $3,
+         descripcion_gasto = $4,
+         referencia = $5,
+         estado = 'aprobada',
+         aprobada_en = NOW()
+       WHERE id=$6 AND estado IN ('recibida','revision') 
+       RETURNING *`,
+      [centro_operacion_id, area_responsable_id, centro_costos || null, descripcion_gasto || null, referencia || null, req.params.id]
     );
-    if (!rows[0]) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'No se puede aprobar en el estado actual' }); }
+    
+    if (!rows[0]) { 
+      await client.query('ROLLBACK'); 
+      return res.status(400).json({ error: 'No se puede aprobar en el estado actual' }); 
+    }
 
-    await registrarEvento(client, req.params.id, req.usuario.id, 'aprobada', comentario || null);
+    await registrarEvento(client, req.params.id, req.usuario.id, 'aprobada', 
+      comentario || `Aprobada para centro ${centro_operacion_id}, área ${area_responsable_id}${centro_costos ? ', CC: ' + centro_costos : ''}`);
     await client.query('COMMIT');
     res.json(rows[0]);
   } catch (err) {
@@ -312,7 +500,7 @@ router.patch('/:id/pagar', requireRol('admin','tesorero'), async (req, res) => {
     );
     if (!rows[0]) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'La factura debe estar causada para marcar como pagada' }); }
 
-    await registrarEvento(client, req.params.id, req.usuario.id, 'pagada');
+    await registrarEvento(client, req.params.id, req.usuario.id, 'pagada', 'Factura marcada como pagada');
     await client.query('COMMIT');
     res.json(rows[0]);
   } catch (err) {
@@ -321,6 +509,65 @@ router.patch('/:id/pagar', requireRol('admin','tesorero'), async (req, res) => {
   } finally {
     client.release();
   }
+});
+
+// ─── POST /api/facturas/:id/soporte-pago ───────────────────────────────────
+router.post('/:id/soporte-pago', requireRol('admin','tesorero'), upload.single('soporte'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Archivo requerido' });
+  }
+
+  const uploadDir = process.env.UPLOAD_DIR || './uploads/soportes';
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  const allowedTypes = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp'];
+  if (!allowedTypes.includes(ext)) {
+    return res.status(400).json({ error: 'Tipo de archivo no permitido. Use PDF, PNG, JPG o GIF' });
+  }
+
+  const filename = `soporte_${req.params.id}_${Date.now()}${ext}`;
+  const filepath = path.join(uploadDir, filename);
+
+  fs.writeFileSync(filepath, req.file.buffer);
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `UPDATE facturas SET soporte_pago=$1, soporte_pago_nombre=$2 WHERE id=$3 RETURNING *`,
+      [filename, req.file.originalname, req.params.id]
+    );
+    if (!rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Factura no encontrada' }); }
+
+    await registrarEvento(client, req.params.id, req.usuario.id, 'soporte_adjuntado', `Soporte de pago: ${req.file.originalname}`);
+    await client.query('COMMIT');
+    res.json(rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    fs.unlinkSync(filepath);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── GET /api/facturas/:id/soporte-pago ────────────────────────────────────
+router.get('/:id/soporte-pago', async (req, res) => {
+  const { rows } = await db.query(
+    'SELECT soporte_pago, soporte_pago_nombre FROM facturas WHERE id=$1',
+    [req.params.id]
+  );
+  if (!rows[0] || !rows[0].soporte_pago) {
+    return res.status(404).json({ error: 'Soporte no encontrado' });
+  }
+
+  const filepath = path.join(process.env.UPLOAD_DIR || './uploads/soportes', rows[0].soporte_pago);
+  if (!fs.existsSync(filepath)) {
+    return res.status(404).json({ error: 'Archivo no encontrado' });
+  }
+
+  res.download(filepath, rows[0].soporte_pago_nombre);
 });
 
 // ─── GET /api/facturas/:id/pdf ─────────────────────────────────────────────────

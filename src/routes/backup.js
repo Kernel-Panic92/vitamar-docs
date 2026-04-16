@@ -7,19 +7,17 @@ const AdmZip = require('adm-zip');
 const db     = require('../db');
 const { authMiddleware, requireRol } = require('../middleware/auth');
 
+router.use(authMiddleware);
 const soloAdmin = requireRol('admin');
 
-// ─── Multer para uploads de restore ─────────────────────────────────────────
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
+  limits: { fileSize: 100 * 1024 * 1024 },
 });
 
-// ─── Paths ────────────────────────────────────────────────────────────────────
 const BACKUP_DIR = path.join(process.cwd(), 'backups');
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads', 'facturas');
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 function ensureBackupDir() {
   if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
 }
@@ -40,95 +38,100 @@ function getBackupFiles() {
     .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 }
 
-// ─── GET /api/backup/lista ──────────────────────────────────────────────────
-router.get('/lista', authMiddleware, soloAdmin, (req, res) => {
+// Helper: genera el ZIP en memoria
+async function generarZip() {
+  const zip = new AdmZip();
+
+  const query = (sql, fallback = []) => {
+    try {
+      const { rows } = db.query(sql);
+      return rows;
+    } catch (e) {
+      console.warn('[Backup] Query warning:', e.message);
+      return fallback;
+    }
+  };
+
+  const cfg = query('SELECT clave, valor FROM configuracion');
+  const usuarios = query('SELECT id, nombre, email, rol, area_id, activo, cambio_password, creado_en FROM usuarios');
+  const areas = query('SELECT * FROM areas');
+  const cats = query('SELECT * FROM categorias_compra');
+  const centros = query('SELECT * FROM centros_operacion');
+  const facturas = query(`
+    SELECT f.*, p.nombre AS proveedor_nombre, p.nit AS proveedor_nit,
+           c.nombre AS categoria_nombre, c.color AS categoria_color
+    FROM facturas f
+    LEFT JOIN proveedores p ON p.id = f.proveedor_id
+    LEFT JOIN categorias_compra c ON c.id = f.categoria_id
+    ORDER BY f.recibida_en DESC LIMIT 1000
+  `);
+  const eventos = query('SELECT * FROM eventos_flujo ORDER BY creado_en DESC LIMIT 5000');
+
+  const data = {
+    app:       'VitamarDocs',
+    version:   '1.0',
+    generado:  new Date().toISOString(),
+    config:    cfg,
+    usuarios:  usuarios.map(u => ({ ...u, password_hash: '(backup_excluded)' })),
+    areas:     areas,
+    categorias: cats,
+    centros:   centros,
+    facturas:  facturas,
+    eventos:   eventos,
+  };
+
+  console.log('[Backup] Generando backup con:', {
+    config: cfg.length,
+    usuarios: usuarios.length,
+    areas: areas.length,
+    categorias: cats.length,
+    centros: centros.length,
+    facturas: facturas.length,
+    eventos: eventos.length
+  });
+
+  zip.addFile('backup.json', Buffer.from(JSON.stringify(data, null, 2), 'utf8'));
+
+  if (fs.existsSync(UPLOAD_DIR)) {
+    const files = fs.readdirSync(UPLOAD_DIR);
+    if (files.length > 0) {
+      zip.addLocalFolder(UPLOAD_DIR, 'uploads');
+    }
+  }
+
+  return zip;
+}
+
+// GET /api/backup — genera y descarga ZIP inmediatamente
+router.get('/', soloAdmin, async (req, res) => {
   try {
-    const archivos = getBackupFiles().slice(0, 30);
+    const zip = await generarZip();
+    const buffer = zip.toBuffer();
+    const fecha = new Date().toISOString().slice(0, 10);
+    const filename = `vitamar_backup_${fecha}.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.end(buffer);
+  } catch (err) {
+    console.error('[Backup] Error:', err);
+    res.status(500).json({ error: 'Error generando backup: ' + err.message });
+  }
+});
+
+// GET /api/backup/lista — lista backups en el servidor
+router.get('/lista', soloAdmin, (req, res) => {
+  try {
+    const archivos = getBackupFiles().slice(0, 10);
     res.json(archivos);
   } catch (err) {
     res.status(500).json({ error: 'Error listando backups: ' + err.message });
   }
 });
 
-// ─── GET /api/backup/generar ────────────────────────────────────────────────
-router.get('/generar', authMiddleware, soloAdmin, async (req, res) => {
-  ensureBackupDir();
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const filename  = `vitamar_backup_${timestamp}.zip`;
-  const filepath  = path.join(BACKUP_DIR, filename);
-
-  try {
-    const zip = new AdmZip();
-
-    // 1. Dump de PostgreSQL
-    const dumpFile = path.join(BACKUP_DIR, `temp_dump_${timestamp}.sql`);
-    try {
-      const dumpCmd = `pg_dump -h ${process.env.DB_HOST || 'localhost'} -p ${process.env.DB_PORT || 5432} -U ${process.env.DB_USER || 'postgres'} -d ${process.env.DB_NAME || 'vitamar_docs'} -Fc -f "${dumpFile}"`;
-      execSync(dumpCmd, {
-        env: { ...process.env, PGPASSWORD: process.env.DB_PASSWORD },
-        stdio: 'pipe',
-      });
-      zip.addLocalFile(dumpFile, '', 'database.dump');
-      fs.unlinkSync(dumpFile);
-    } catch (pgErr) {
-      console.error('[Backup] pg_dump error:', pgErr.message);
-      // Intentar dump plano
-      try {
-        const dumpCmdText = `pg_dump -h ${process.env.DB_HOST || 'localhost'} -p ${process.env.DB_PORT || 5432} -U ${process.env.DB_USER || 'postgres'} -d ${process.env.DB_NAME || 'vitamar_docs'} --column-inserts`;
-        const dumpText = execSync(dumpCmdText, {
-          env: { ...process.env, PGPASSWORD: process.env.DB_PASSWORD },
-          stdio: 'pipe',
-        }).toString();
-        zip.addFile('database.sql', Buffer.from(dumpText, 'utf8'));
-      } catch (pgErr2) {
-        console.error('[Backup] pg_dump text fallback error:', pgErr2.message);
-      }
-    }
-
-    // 2. Configuración JSON
-    const cfg = await db.query('SELECT clave, valor FROM configuracion');
-    const usuarios = await db.query(
-      'SELECT id, nombre, email, rol, area_id, activo, cambio_password, creado_en FROM usuarios'
-    );
-    const areas = await db.query('SELECT * FROM areas');
-
-    const configJson = {
-      app:       'VitamarDocs',
-      version:   '1.0.0',
-      generado:  new Date().toISOString(),
-      config:    cfg.rows,
-      usuarios:  usuarios.rows.map(u => ({ ...u, password_hash: undefined })),
-      areas:     areas.rows,
-    };
-    zip.addFile('config.json', Buffer.from(JSON.stringify(configJson, null, 2), 'utf8'));
-
-    // 3. Carpeta uploads (si existe)
-    if (fs.existsSync(UPLOAD_DIR)) {
-      const files = fs.readdirSync(UPLOAD_DIR);
-      if (files.length > 0) {
-        zip.addLocalFolder(UPLOAD_DIR, 'uploads');
-      }
-    }
-
-    // Guardar ZIP
-    zip.writeZip(filepath);
-
-    const stat = fs.statSync(filepath);
-    res.json({
-      ok:      true,
-      archivo: filename,
-      tamano:  stat.size,
-      fecha:   stat.mtime.toISOString(),
-    });
-
-  } catch (err) {
-    console.error('[Backup] Error generando backup:', err);
-    res.status(500).json({ error: 'Error generando backup: ' + err.message });
-  }
-});
-
-// ─── GET /api/backup/descargar/:filename ────────────────────────────────────
-router.get('/descargar/:filename', authMiddleware, soloAdmin, (req, res) => {
+// GET /api/backup/descargar/:filename — descarga backup específico
+router.get('/descargar/:filename', soloAdmin, (req, res) => {
   const { filename } = req.params;
   if (!/^vitamar_backup_[\w\-]+\.zip$/.test(filename)) {
     return res.status(400).json({ error: 'Nombre de archivo inválido' });
@@ -142,9 +145,9 @@ router.get('/descargar/:filename', authMiddleware, soloAdmin, (req, res) => {
   res.download(filepath, filename);
 });
 
-// ─── POST /api/backup/restaurar ──────────────────────────────────────────────
-router.post('/restaurar', authMiddleware, soloAdmin, upload.single('backup'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Archivo requerido' });
+// POST /api/restore — restaura desde archivo subido
+router.post('/restore', soloAdmin, upload.single('backup'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' });
 
   let zip;
   try {
@@ -153,82 +156,79 @@ router.post('/restaurar', authMiddleware, soloAdmin, upload.single('backup'), as
     return res.status(400).json({ error: 'Archivo ZIP inválido' });
   }
 
+  const entry = zip.getEntry('backup.json');
+  if (!entry) return res.status(400).json({ error: 'El ZIP no contiene backup.json' });
+
+  let data;
+  try {
+    data = JSON.parse(entry.getData().toString('utf8'));
+  } catch (e) {
+    return res.status(400).json({ error: 'backup.json corrupto' });
+  }
+
+  if (data.app !== 'VitamarDocs') {
+    return res.status(400).json({ error: 'Archivo de backup incompatible' });
+  }
+
   const client = await db.getClient();
 
   try {
     await client.query('BEGIN');
 
-    // Restaurar config.json
-    const configEntry = zip.getEntry('config.json');
-    if (configEntry) {
-      const config = JSON.parse(configEntry.getData().toString('utf8'));
-
-      if (config.app !== 'VitamarDocs') {
-        throw new Error('Archivo de backup incompatible');
-      }
-
-      // Restaurar configuración
-      if (config.config?.length) {
-        for (const row of config.config) {
-          await client.query(
-            'INSERT INTO configuracion (clave, valor, actualizado_en) VALUES ($1, $2, NOW()) ON CONFLICT (clave) DO UPDATE SET valor=$2, actualizado_en=NOW()',
-            [row.clave, row.valor]
-          );
-        }
-      }
-
-      // Restaurar áreas (sin tocar IDs para mantener referencias)
-      if (config.areas?.length) {
-        for (const area of config.areas) {
-          await client.query(
-            `INSERT INTO areas (id, nombre, jefe_nombre, email, activo, creado_en, actualizado_en)
-             VALUES ($1, $2, $3, $4, $5, $6, NOW())
-             ON CONFLICT (id) DO UPDATE SET nombre=$2, jefe_nombre=$3, email=$4, activo=$5, actualizado_en=NOW()`,
-            [area.id, area.nombre, area.jefe_nombre, area.email, area.activo, area.creado_en]
-          );
-        }
-      }
-
-      // Restaurar usuarios (sin passwords, sin admin actual)
-      if (config.usuarios?.length) {
-        for (const u of config.usuarios) {
-          if (u.email === req.usuario.email) continue; // proteger sesión actual
-          await client.query(
-            `INSERT INTO usuarios (id, nombre, email, rol, area_id, activo, cambio_password, creado_en, actualizado_en)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-             ON CONFLICT (id) DO UPDATE SET nombre=$2, email=$3, rol=$4, area_id=$5, activo=$6, cambio_password=$7, actualizado_en=NOW()`,
-            [u.id, u.nombre, u.email, u.rol, u.area_id, u.activo, u.cambio_password || false, u.creado_en]
-          );
-        }
+    if (data.config?.length) {
+      for (const row of data.config) {
+        await client.query(
+          'INSERT INTO configuracion (clave, valor, actualizado_en) VALUES ($1, $2, NOW()) ON CONFLICT (clave) DO UPDATE SET valor=$2, actualizado_en=NOW()',
+          [row.clave, row.valor]
+        );
       }
     }
 
-    // Restaurar database.dump (PostgreSQL custom format)
-    const dumpEntry = zip.getEntry('database.dump');
-    if (dumpEntry) {
-      const tmpDump = path.join(BACKUP_DIR, `temp_restore_${Date.now()}.dump`);
-      fs.writeFileSync(tmpDump, dumpEntry.getData());
-
-      try {
-        const restoreCmd = `pg_restore -h ${process.env.DB_HOST || 'localhost'} -p ${process.env.DB_PORT || 5432} -U ${process.env.DB_USER || 'postgres'} -d ${process.env.DB_NAME || 'vitamar_docs'} --clean --if-exists -Fc "${tmpDump}"`;
-        execSync(restoreCmd, {
-          env: { ...process.env, PGPASSWORD: process.env.DB_PASSWORD },
-          stdio: 'pipe',
-        });
-      } catch (pgErr) {
-        console.warn('[Restore] pg_restore error:', pgErr.message);
-      } finally {
-        if (fs.existsSync(tmpDump)) fs.unlinkSync(tmpDump);
+    if (data.areas?.length) {
+      for (const a of data.areas) {
+        await client.query(
+          `INSERT INTO areas (id, nombre, jefe_id, email, activo, creado_en, actualizado_en)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW())
+           ON CONFLICT (id) DO UPDATE SET nombre=$2, jefe_id=$3, email=$4, activo=$5, actualizado_en=NOW()`,
+          [a.id, a.nombre, a.jefe_id || null, a.email, a.activo ?? true, a.creado_en]
+        );
       }
     }
 
-    // Restaurar uploads
-    const uploadsEntry = zip.getEntry('uploads');
-    if (uploadsEntry && fs.existsSync(UPLOAD_DIR)) {
-      // Limpiar uploads actuales
-      const existing = fs.readdirSync(UPLOAD_DIR);
-      for (const f of existing) {
-        fs.unlinkSync(path.join(UPLOAD_DIR, f));
+    if (data.usuarios?.length) {
+      for (const u of data.usuarios) {
+        if (u.email === req.usuario.email) continue;
+        const hash = u.password_hash && u.password_hash !== '(backup_excluded)' 
+          ? u.password_hash 
+          : '$2a$12$placeholder.for.backup.only.do.not.use';
+        await client.query(
+          `INSERT INTO usuarios (id, nombre, email, password_hash, rol, area_id, activo, cambio_password, creado_en, actualizado_en)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+           ON CONFLICT (id) DO UPDATE SET nombre=$2, email=$3, password_hash=COALESCE(NULLIF($4, '$2a$12$placeholder.for.backup.only.do.not.use'), usuarios.password_hash), rol=$5, area_id=$6, activo=$7, cambio_password=$8, actualizado_en=NOW()`,
+          [u.id, u.nombre, u.email, hash, u.rol, u.area_id, u.activo ?? true, u.cambio_password ?? false, u.creado_en]
+        );
+      }
+    }
+
+    if (data.categorias?.length) {
+      for (const c of data.categorias) {
+        await client.query(
+          `INSERT INTO categorias_compra (id, nombre, descripcion, color, activo, creado_en, actualizado_en)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW())
+           ON CONFLICT (id) DO UPDATE SET nombre=$2, descripcion=$3, color=$4, activo=$5, actualizado_en=NOW()`,
+          [c.id, c.nombre, c.descripcion, c.color, c.activo ?? true, c.creado_en]
+        );
+      }
+    }
+
+    if (data.centros?.length) {
+      for (const c of data.centros) {
+        await client.query(
+          `INSERT INTO centros_operacion (id, nombre, codigo, descripcion, direccion, telefono, email, activo, creado_en, actualizado_en)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+           ON CONFLICT (id) DO UPDATE SET nombre=$2, codigo=$3, descripcion=$4, direccion=$5, telefono=$6, email=$7, activo=$8, actualizado_en=NOW()`,
+          [c.id, c.nombre, c.codigo, c.descripcion, c.direccion, c.telefono, c.email, c.activo ?? true, c.creado_en]
+        );
       }
     }
 
@@ -244,8 +244,111 @@ router.post('/restaurar', authMiddleware, soloAdmin, upload.single('backup'), as
   }
 });
 
-// ─── DELETE /api/backup/:filename ───────────────────────────────────────────
-router.delete('/:filename', authMiddleware, soloAdmin, (req, res) => {
+// POST /api/restore/local/:filename — restaura desde backup en servidor
+router.post('/restore/local/:filename', soloAdmin, (req, res) => {
+  const { filename } = req.params;
+  if (!/^vitamar_backup_[\w\-]+\.zip$/.test(filename)) {
+    return res.status(400).json({ error: 'Nombre de archivo inválido' });
+  }
+
+  const filepath = path.join(BACKUP_DIR, filename);
+  if (!fs.existsSync(filepath)) {
+    return res.status(404).json({ error: 'Archivo no encontrado' });
+  }
+
+  let zip;
+  try {
+    zip = new AdmZip(filepath);
+  } catch (err) {
+    return res.status(400).json({ error: 'Archivo ZIP inválido' });
+  }
+
+  const entry = zip.getEntry('backup.json');
+  if (!entry) return res.status(400).json({ error: 'El ZIP no contiene backup.json' });
+
+  let data;
+  try {
+    data = JSON.parse(entry.getData().toString('utf8'));
+  } catch (e) {
+    return res.status(400).json({ error: 'backup.json corrupto' });
+  }
+
+  if (data.app !== 'VitamarDocs') {
+    return res.status(400).json({ error: 'Archivo de backup incompatible' });
+  }
+
+  const client = db; // usar db directo con pool
+
+  (async () => {
+    try {
+      if (data.config?.length) {
+        for (const row of data.config) {
+          await db.query(
+            'INSERT INTO configuracion (clave, valor, actualizado_en) VALUES ($1, $2, NOW()) ON CONFLICT (clave) DO UPDATE SET valor=$2, actualizado_en=NOW()',
+            [row.clave, row.valor]
+          );
+        }
+      }
+
+      if (data.areas?.length) {
+        for (const a of data.areas) {
+          await db.query(
+            `INSERT INTO areas (id, nombre, jefe_id, email, activo, creado_en, actualizado_en)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW())
+             ON CONFLICT (id) DO UPDATE SET nombre=$2, jefe_id=$3, email=$4, activo=$5, actualizado_en=NOW()`,
+            [a.id, a.nombre, a.jefe_id || null, a.email, a.activo ?? true, a.creado_en]
+          );
+        }
+      }
+
+      if (data.usuarios?.length) {
+        for (const u of data.usuarios) {
+          if (u.email === req.usuario.email) continue;
+          const hash = u.password_hash && u.password_hash !== '(backup_excluded)' 
+            ? u.password_hash 
+            : '$2a$12$placeholder.for.backup.only.do.not.use';
+          await db.query(
+            `INSERT INTO usuarios (id, nombre, email, password_hash, rol, area_id, activo, cambio_password, creado_en, actualizado_en)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+             ON CONFLICT (id) DO UPDATE SET nombre=$2, email=$3, password_hash=COALESCE(NULLIF($4, '$2a$12$placeholder.for.backup.only.do.not.use'), usuarios.password_hash), rol=$5, area_id=$6, activo=$7, cambio_password=$8, actualizado_en=NOW()`,
+            [u.id, u.nombre, u.email, hash, u.rol, u.area_id, u.activo ?? true, u.cambio_password ?? false, u.creado_en]
+          );
+        }
+      }
+
+      if (data.categorias?.length) {
+        for (const c of data.categorias) {
+          await db.query(
+            `INSERT INTO categorias_compra (id, nombre, descripcion, color, activo, creado_en, actualizado_en)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW())
+             ON CONFLICT (id) DO UPDATE SET nombre=$2, descripcion=$3, color=$4, activo=$5, actualizado_en=NOW()`,
+            [c.id, c.nombre, c.descripcion, c.color, c.activo ?? true, c.creado_en]
+          );
+        }
+      }
+
+      if (data.centros?.length) {
+        for (const c of data.centros) {
+          await db.query(
+            `INSERT INTO centros_operacion (id, nombre, codigo, descripcion, direccion, telefono, email, activo, creado_en, actualizado_en)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+             ON CONFLICT (id) DO UPDATE SET nombre=$2, codigo=$3, descripcion=$4, direccion=$5, telefono=$6, email=$7, activo=$8, actualizado_en=NOW()`,
+            [c.id, c.nombre, c.codigo, c.descripcion, c.direccion, c.telefono, c.email, c.activo ?? true, c.creado_en]
+          );
+        }
+      }
+
+      res.json({ ok: true, mensaje: 'Restauración completada correctamente' });
+
+    } catch (err) {
+      console.error('[Restore local] Error:', err);
+      res.status(500).json({ error: 'Error en restauración: ' + err.message });
+    }
+  })();
+});
+
+// DELETE /api/backup/:filename — elimina backup del servidor
+router.delete('/:filename', soloAdmin, (req, res) => {
   const { filename } = req.params;
   if (!/^vitamar_backup_[\w\-]+\.zip$/.test(filename)) {
     return res.status(400).json({ error: 'Nombre de archivo inválido' });

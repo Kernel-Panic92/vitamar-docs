@@ -17,6 +17,9 @@ const migrations = [
   actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`,
 
+// ─── 002b: Jefe como FK a usuarios ────────────────────────────────────────────
+`ALTER TABLE areas ADD COLUMN IF NOT EXISTS jefe_id UUID REFERENCES usuarios(id) ON DELETE SET NULL`,
+
 // ─── 003: Usuarios ────────────────────────────────────────────────────────────
 `CREATE TABLE IF NOT EXISTS usuarios (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -231,6 +234,44 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
     BEFORE UPDATE ON categorias_compra
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+
+// ─── 017: Campos adicionales para aprobación ──────────────────────────────────
+`ALTER TABLE facturas ADD COLUMN IF NOT EXISTS descripcion_gasto TEXT`,
+`ALTER TABLE facturas ADD COLUMN IF NOT EXISTS referencia VARCHAR(100)`,
+
+// ─── 018: Centros de operación ────────────────────────────────────────────────
+`CREATE TABLE IF NOT EXISTS centros_operacion (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nombre      VARCHAR(200) NOT NULL UNIQUE,
+  codigo      VARCHAR(50),
+  descripcion TEXT,
+  direccion   TEXT,
+  telefono    VARCHAR(50),
+  email       VARCHAR(200),
+  activo      BOOLEAN NOT NULL DEFAULT TRUE,
+  creado_en   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`,
+
+// ─── 019: Vincular facturas a centros de operación ────────────────────────────
+`ALTER TABLE facturas ADD COLUMN IF NOT EXISTS centro_operacion_id UUID REFERENCES centros_operacion(id) ON DELETE SET NULL`,
+
+// ─── 020: Orden de compra del XML ────────────────────────────────────────────
+`ALTER TABLE facturas ADD COLUMN IF NOT EXISTS orden_compra VARCHAR(100)`,
+
+// ─── 021: Permisos de categorías por usuario ───────────────────────────────────
+`CREATE TABLE IF NOT EXISTS categorias_usuario (
+  usuario_id   UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  categoria_id UUID NOT NULL REFERENCES categorias_compra(id) ON DELETE CASCADE,
+  PRIMARY KEY (usuario_id, categoria_id)
+)`,
+
+`CREATE INDEX IF NOT EXISTS idx_categorias_usuario_usuario ON categorias_usuario(usuario_id)`,
+
+// ─── 022: Soporte de pago ────────────────────────────────────────────────────
+`ALTER TABLE facturas ADD COLUMN IF NOT EXISTS soporte_pago VARCHAR(255)`,
+`ALTER TABLE facturas ADD COLUMN IF NOT EXISTS soporte_pago_nombre VARCHAR(255)`,
+`ALTER TABLE facturas ADD COLUMN IF NOT EXISTS pagada_en TIMESTAMPTZ`,
 
 ];
 

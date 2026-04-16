@@ -116,6 +116,14 @@ body.light tr:hover td{background:rgba(0,0,0,.03)}
 .b-rechazada{background:rgba(248,113,113,.15);color:#F87171}
 .b-pagada{background:rgba(110,231,183,.15);color:#6EE7B7}
 
+/* ── CATEGORÍAS USUARIO ── */
+.cat-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:all .15s}
+.cat-item:hover{background:rgba(79,142,247,.08);border-color:rgba(79,142,247,.3)}
+.cat-check{width:22px;height:22px;border-radius:6px;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--success);flex-shrink:0;transition:all .15s}
+.cat-item:has(.ucat:checked) .cat-check{background:var(--accent);border-color:var(--accent);color:#fff}
+.cat-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.cat-name{font-size:13px;font-weight:500}
+
 /* ── BUTTONS ── */
 .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:9px;font-family:var(--font-body);font-size:13.5px;font-weight:500;cursor:pointer;border:none;transition:all .18s}
 .btn-primary{background:var(--accent);color:#fff}
@@ -347,7 +355,7 @@ const COLS=['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#F97316','#06B6D4
 const PASOS=[{id:'recepcion',l:'Recepción',d:'Sistema recibe'},{id:'revision',l:'Revisión',d:'Asigna CC'},{id:'aprobacion',l:'Aprobación',d:'Responsable'},{id:'causacion',l:'Causación',d:'Tesorería'},{id:'pagada',l:'Pagada',d:'Archivada'}];
 const EORD=['recibida','revision','aprobada','causada','pagada'];
 const EM={recibida:{l:'Recibida',c:'#60A5FA'},revision:{l:'En revisión',c:'#FBBF24'},aprobada:{l:'Aprobada',c:'#34D399'},causada:{l:'Causada',c:'#A78BFA'},rechazada:{l:'Rechazada',c:'#F87171'},pagada:{l:'Pagada',c:'#6EE7B7'}};
-const NAV=[{id:'dashboard',l:'Dashboard',i:'📊',s:'p'},{id:'facturas',l:'Facturas',i:'📄',s:'p',badge:'f'},{id:'pendientes',l:'Pendientes',i:'⏳',s:'f',badge:'p',w:true},{id:'aprobaciones',l:'Aprobaciones',i:'✓',s:'f'},{id:'causacion',l:'Causación',i:'📥',s:'f'},{id:'categorias',l:'Categorías',i:'🏷️',s:'c'},{id:'areas',l:'Áreas',i:'🏢',s:'c'},{id:'backup',l:'Backup',i:'💾',s:'c',admin:true},{id:'usuarios',l:'Usuarios',i:'👤',s:'c',admin:true}];
+const NAV=[{id:'dashboard',l:'Dashboard',i:'📊',s:'p'},{id:'facturas',l:'Facturas',i:'📄',s:'p',badge:'f'},{id:'pendientes',l:'Pendientes',i:'⏳',s:'f',badge:'p',w:true},{id:'aprobaciones',l:'Aprobaciones',i:'✓',s:'f'},{id:'causacion',l:'Causación',i:'📥',s:'f'},{id:'categorias',l:'Categorías',i:'🏷️',s:'c'},{id:'areas',l:'Áreas',i:'🏢',s:'c'},{id:'centros',l:'Centros',i:'🗺️',s:'c'},{id:'configuracion',l:'Configuración',i:'⚙️',s:'c',admin:true},{id:'backup',l:'Backup',i:'💾',s:'c',admin:true},{id:'usuarios',l:'Usuarios',i:'👤',s:'c',admin:true},{id:'audit',l:'Auditoría',i:'🔒',s:'c',roles:['admin','auditor']}];
 const SECS=[{id:'p',l:'Principal'},{id:'f',l:'Flujo'},{id:'c',l:'Config'}];
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -497,7 +505,7 @@ function showApp(){
 function buildNav(){
   let h='';
   for(const sec of SECS){
-    const items=NAV.filter(n=>n.s===sec.id&&(!n.admin||S.usuario?.rol==='admin'));
+    const items=NAV.filter(n=>n.s===sec.id&&(!n.roles||n.roles.includes(S.usuario?.rol)));
     if(!items.length)continue;
     h+=`<div style="font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;padding:10px 24px 4px;margin-top:4px">${sec.l}</div>`;
     for(const n of items)h+=`<div class="nav-item" id="nv-${n.id}" onclick="goNav('${n.id}')">${n.i}<span style="flex:1">${n.l}</span>${n.badge?`<span class="badge" style="font-size:10px;padding:2px 6px;background:${n.w?'rgba(251,191,36,.15)':'rgba(79,142,247,.15)'};color:${n.w?'var(--warning)':'var(--accent)'}" id="nb-${n.badge}">0</span>`:''}</div>`;
@@ -523,13 +531,30 @@ async function goTo(v){
     else if(v==='causacion')await rCaus();
     else if(v==='categorias')await rCats();
     else if(v==='areas')await rAreas();
+    else if(v==='centros')await rCentros();
     else if(v==='usuarios')await rUsers();
     else if(v==='backup')await rBackup();
+    else if(v==='configuracion')await rConfig();
+    else if(v==='audit')await rAudit();
     else el.innerHTML='<div class="empty">Módulo en construcción</div>';
   }catch(ex){el.innerHTML=`<div class="empty" style="color:var(--danger)">${ex.message}</div>`}
 }
 async function refreshBadges(){
-  try{const f=await api('GET','/facturas?limit=200');const all=f.data||[];const nb=$('nb-f');const np=$('nb-p');if(nb)nb.textContent=f.total||all.length;if(np)np.textContent=all.filter(x=>x.estado==='revision').length}catch(_){}
+  try{
+    const [f,pend]=await Promise.all([
+      api('GET','/facturas?limit=200'),
+      api('GET','/facturas/pendientes')
+    ]);
+    const all=f.data||[];
+    const nb=$('nb-f');const np=$('nb-p');
+    if(nb)nb.textContent=f.total||all.length;
+    if(np){
+      const urgentes=pend.data?.filter(x=>x.prioridad==='critico'||x.prioridad==='alerta').length||0;
+      np.textContent=urgentes||'';
+      np.style.background=urgentes?'var(--danger)':'rgba(251,191,36,.15)';
+      np.style.color=urgentes?'#fff':'var(--warning)';
+    }
+  }catch(_){}
 }
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
@@ -538,6 +563,11 @@ async function rDash(){
   const por=s=>all.filter(x=>x.estado===s).length;
   const vc=all.filter(x=>x.estado==='causada'||x.estado==='pagada').reduce((a,x)=>a+parseFloat(x.valor_total||0),0);
   const sync=await checkSyncStatus();
+  if(sync.sincronizando){
+    startSyncPoll();
+  }else{
+    stopSyncPoll();
+  }
   $('content').innerHTML=`
     <div class="page-header"><div><div class="page-title">Dashboard</div><div class="page-sub">Resumen general del sistema</div></div></div>
     ${sync.bar}
@@ -560,10 +590,10 @@ async function checkSyncStatus(){
   try{
     const r=await api('GET','/sync/status');
     if(r.sincronizando){
-      return{bar:`<div style="background:rgba(79,142,247,.1);border:1px solid rgba(79,142,247,.3);border-radius:12px;padding:16px;margin-bottom:20px">
+      return{sincronizando:true,bar:`<div style="background:rgba(79,142,247,.1);border:1px solid rgba(79,142,247,.3);border-radius:12px;padding:16px;margin-bottom:20px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <span style="font-weight:600;color:var(--accent)">Sincronizando correo...</span>
-          <span style="color:var(--muted);font-size:13px">${r.procesando}/${r.totalMensajes}</span>
+          <span style="color:var(--muted);font-size:13px">${r.procesando}/${r.totalMensajes} — ${r.creadas} nuevas</span>
         </div>
         <div style="background:var(--surface2);border-radius:6px;height:8px;overflow:hidden">
           <div style="background:var(--accent);height:100%;width:${r.progreso}%;transition:width .3s"></div>
@@ -571,55 +601,190 @@ async function checkSyncStatus(){
         <div style="margin-top:8px;font-size:12px;color:var(--muted)">${r.mensaje}</div>
       </div>`};
     }else{
-      const btn=r.ultimoSyncFormateado?`<button class="btn btn-secondary btn-sm" onclick="iniciarSync()" title="Sincronizar ahora">Sincronizar</button>`:'';
-      return{bar:`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
-        <div style="font-size:13px;color:var(--muted)">Ultima sync: ${r.ultimoSyncFormateado||'Nunca'} - ${r.mensaje||''}</div>
-        ${btn}
+      return{sincronizando:false,bar:`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:13px;color:var(--muted)">Ultima sync: ${r.ultimoSyncFormateado||'Nunca'} — ${r.mensaje||''}</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="rescanearTodo()" title="Re-escanear todos los mensajes (incluye leídos)"><span style="font-size:12px">⟲</span> Rescanear</button>
+          <button class="btn btn-secondary btn-sm" onclick="iniciarSync()" title="Sincronizar solo mensajes no leídos"><span style="font-size:14px">↻</span> Sync</button>
+        </div>
       </div>`};
     }
-  }catch(e){return{bar:''}}
+  }catch(e){return{sincronizando:false,bar:`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:13px;color:var(--muted)">Sincronización manual</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="rescanearTodo()"><span style="font-size:12px">⟲</span> Rescanear</button>
+          <button class="btn btn-secondary btn-sm" onclick="iniciarSync()"><span style="font-size:14px">↻</span> Sync</button>
+        </div>
+      </div>`}}
 }
-
+let syncPollInterval=null;
 async function iniciarSync(){
   try{
-    await api('POST','/sync/sync');
+    await api('POST','/sync');
     toast('Sincronizacion iniciada','info');
     if(S.view==='dashboard')rDash();
   }catch(e){toast(e.message,'error')}
 }
+async function rescanearTodo(){
+  try{
+    await api('POST','/sync',{rescanAll:true});
+    toast('Reescaneo iniciado','info');
+    if(S.view==='dashboard')rDash();
+  }catch(e){toast(e.message,'error')}
+}
+function startSyncPoll(){
+  if(syncPollInterval)return;
+  syncPollInterval=setInterval(async()=>{
+    if(S.view==='dashboard')await rDash();
+  },2000);
+}
+function stopSyncPoll(){
+  if(syncPollInterval){clearInterval(syncPollInterval);syncPollInterval=null}
+}
 
 // ─── FACTURAS ────────────────────────────────────────────────────────────────
 let fFiltro='todas';
+let fBusqueda={numero:'',nit:'',fecha_desde:'',fecha_hasta:'',valor_min:'',valor_max:'',proveedor_id:'',buscar:''};
+
 async function rFacturas(filtro){
   if(filtro!==undefined)fFiltro=filtro;
-  const q=fFiltro==='todas'?'':('?estado='+fFiltro);
-  const f=await api('GET',`/facturas${q}&limit=100`);S.facturas=f.data||[];
+  
+  // Construir query params
+  const params=new URLSearchParams();
+  if(fFiltro!=='todas')params.set('estado',fFiltro);
+  if(fBusqueda.numero)params.set('numero',fBusqueda.numero);
+  if(fBusqueda.nit)params.set('nit_emisor',fBusqueda.nit);
+  if(fBusqueda.fecha_desde)params.set('fecha_desde',fBusqueda.fecha_desde);
+  if(fBusqueda.fecha_hasta)params.set('fecha_hasta',fBusqueda.fecha_hasta);
+  if(fBusqueda.valor_min)params.set('valor_min',fBusqueda.valor_min);
+  if(fBusqueda.valor_max)params.set('valor_max',fBusqueda.valor_max);
+  if(fBusqueda.proveedor_id)params.set('proveedor_id',fBusqueda.proveedor_id);
+  if(fBusqueda.buscar)params.set('buscar',fBusqueda.buscar);
+  params.set('limit','100');
+  
+  const f=await api('GET',`/facturas?${params.toString()}`);S.facturas=f.data||[];
   const all=f.data||[];
   const cnts={todas:f.total||all.length};
   ['recibida','revision','aprobada','causada','rechazada'].forEach(e=>cnts[e]=all.filter(x=>x.estado===e).length);
   const fbs=[{id:'todas',l:'Todas'},{id:'recibida',l:'Recibidas'},{id:'revision',l:'En revisión'},{id:'aprobada',l:'Aprobadas'},{id:'causada',l:'Causadas'},{id:'rechazada',l:'Rechazadas'}].map(fb=>`<button class="fb${fFiltro===fb.id?' active':''}" onclick="rFacturas('${fb.id}')">${fb.l}<span class="fc">${cnts[fb.id]||0}</span></button>`).join('');
+  
+  // Cargar proveedores para el filtro
+  if(!S.proveedores)S.proveedores=await api('GET','/proveedores');
+  const provOpts=S.proveedores.map(p=>`<option value="${p.id}" ${fBusqueda.proveedor_id===p.id?'selected':''}>${esc(p.nombre)}</option>`).join('');
+  
+  const hayFiltros=fBusqueda.numero||fBusqueda.nit||fBusqueda.fecha_desde||fBusqueda.fecha_hasta||fBusqueda.valor_min||fBusqueda.valor_max||fBusqueda.proveedor_id||fBusqueda.buscar;
+  
   $('content').innerHTML=`
-    <div class="page-header"><div><div class="page-title">Facturas</div><div class="page-sub">Gestión completa del ciclo documental</div></div><button class="btn btn-primary" onclick="mNuevaF()">+ Nueva factura</button></div>
+    <div class="page-header"><div><div class="page-title">Facturas</div><div class="page-sub">${f.total||0} factura(s) encontrada(s)</div></div><button class="btn btn-primary" onclick="mNuevaF()">+ Nueva factura</button></div>
     <div class="filters">${fbs}</div>
+    
+    <!-- Filtros avanzados -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <span style="font-weight:600;font-size:13px">Filtros de búsqueda</span>
+        ${hayFiltros?`<button onclick="limpiarFiltrosF()" style="background:rgba(247,97,79,.1);border:1px solid rgba(247,97,79,.2);color:var(--danger);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">✕ Limpiar</button>`:''}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:10px;text-transform:uppercase;color:var(--muted)">Buscar</label>
+          <input type="text" id="ff-buscar" placeholder="N°, proveedor, NIT, CUFE..." value="${esc(fBusqueda.buscar)}" onkeydown="if(event.key==='Enter')aplicarFiltrosF()">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:10px;text-transform:uppercase;color:var(--muted)">N° Factura</label>
+          <input type="text" id="ff-numero" placeholder="Ej: 59826" value="${esc(fBusqueda.numero)}">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:10px;text-transform:uppercase;color:var(--muted)">NIT Emisor</label>
+          <input type="text" id="ff-nit" placeholder="Ej: 900768941" value="${esc(fBusqueda.nit)}">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:10px;text-transform:uppercase;color:var(--muted)">Proveedor</label>
+          <select id="ff-proveedor"><option value="">Todos</option>${provOpts}</select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:10px;text-transform:uppercase;color:var(--muted)">Desde fecha</label>
+          <input type="date" id="ff-fd" value="${fBusqueda.fecha_desde}">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:10px;text-transform:uppercase;color:var(--muted)">Hasta fecha</label>
+          <input type="date" id="ff-fh" value="${fBusqueda.fecha_hasta}">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:10px;text-transform:uppercase;color:var(--muted)">Valor mín ($)</label>
+          <input type="number" id="ff-vmin" placeholder="0" value="${fBusqueda.valor_min}">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label style="font-size:10px;text-transform:uppercase;color:var(--muted)">Valor máx ($)</label>
+          <input type="number" id="ff-vmax" placeholder="999999999" value="${fBusqueda.valor_max}">
+        </div>
+      </div>
+      <button onclick="aplicarFiltrosF()" class="btn btn-primary btn-sm" style="margin-top:12px">🔍 Buscar</button>
+    </div>
+    
     <div class="tbl">
-      <div class="tbl-head"><div class="tbl-title">${cnts.todas} factura(s)</div></div>
-      <table><thead><tr><th># Factura</th><th>Proveedor</th><th>Categoría</th><th>Área</th><th>Valor</th><th>Estado</th><th>Límite DIAN</th><th></th></tr></thead>
-      <tbody>${all.length?all.map(f=>`<tr onclick="abrirF('${f.id}')"><td class="mono" data-label="Factura">${esc(f.numero_factura)}</td><td data-label="Proveedor" style="font-weight:500">${esc(f.proveedor_nombre||'—')}</td><td data-label="Categoría">${ctag(f.categoria_color,f.categoria_nombre)}</td><td data-label="Área" style="color:var(--muted)">${esc(f.area_nombre||'Sin asignar')}</td><td data-label="Valor" style="font-weight:500">${fmt(f.valor_total||f.valor||0)}</td><td data-label="Estado">${bdg(f.estado)}</td><td data-label="DIAN" style="color:${f.dian_tacita?'var(--warning)':'var(--muted)'}">${fdate(f.limite_dian)}</td><td>${f.archivo_pdf?`<span onclick="event.stopPropagation();verPdf('${f.id}')" title="Ver PDF" style="color:var(--accent);font-size:16px;cursor:pointer">📄</span>`:''}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">Sin facturas</td></tr>'}</tbody></table>
+      <div class="tbl-head"><div class="tbl-title">${all.length} factura(s)</div></div>
+      <table><thead><tr><th># Factura</th><th>Centro</th><th>Proveedor</th><th>Valor</th><th>Estado</th><th>Recibida</th><th></th></tr></thead>
+      <tbody>${all.length?all.map(f=>`<tr onclick="abrirF('${f.id}')"><td class="mono" data-label="Factura">${esc(f.numero_factura)}</td><td data-label="Centro" style="font-size:12px;color:var(--muted)">${esc(f.centro_operacion_nombre||'—')}</td><td data-label="Proveedor" style="font-weight:500">${esc(f.proveedor_nombre||f.nombre_emisor||'—')}</td><td data-label="Valor" style="font-weight:500">${fmt(f.valor_total||f.valor||0)}</td><td data-label="Estado">${bdg(f.estado)}</td><td data-label="Fecha" style="color:var(--muted);font-size:12px">${fdate(f.fecha_factura||f.recibida_en)}</td><td>${f.archivo_pdf?`<span onclick="event.stopPropagation();verPdf('${f.id}')" title="Ver PDF" style="color:var(--accent);font-size:16px;cursor:pointer">📄</span>`:''}</td></tr>`).join(''):'<tr><td colspan="7" class="empty">Sin facturas</td></tr>'}</tbody></table>
     </div>`;
   refreshBadges();
 }
 
+function aplicarFiltrosF(){
+  fBusqueda={
+    numero:$('ff-numero')?.value||'',
+    nit:$('ff-nit')?.value||'',
+    fecha_desde:$('ff-fd')?.value||'',
+    fecha_hasta:$('ff-fh')?.value||'',
+    valor_min:$('ff-vmin')?.value||'',
+    valor_max:$('ff-vmax')?.value||'',
+    proveedor_id:$('ff-proveedor')?.value||'',
+    buscar:$('ff-buscar')?.value||''
+  };
+  rFacturas();
+}
+
+function limpiarFiltrosF(){
+  fBusqueda={numero:'',nit:'',fecha_desde:'',fecha_hasta:'',valor_min:'',valor_max:'',proveedor_id:'',buscar:''};
+  rFacturas();
+}
+
 // ─── PENDIENTES ──────────────────────────────────────────────────────────────
 async function rPend(){
-  const f=await api('GET','/facturas?estado=revision&limit=100');const all=f.data||[];
-  $('content').innerHTML=`
-    <div class="page-header"><div><div class="page-title">Pendientes</div><div class="page-sub">${all.length} factura(s) esperando acción</div></div></div>
-    <div style="display:grid;gap:12px">${all.length?all.map(f=>`<div class="tbl" style="cursor:pointer;padding:16px 20px;display:flex;align-items:center;gap:20px" onclick="abrirF('${f.id}')">
-      <div style="flex:1"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono">${esc(f.numero_factura)}</span>${bdg(f.estado)}${f.dian_tacita?'<span class="badge" style="background:rgba(251,191,36,.15);color:var(--warning)">DIAN tácita</span>':''}</div>
+  const f=await api('GET','/facturas/pendientes');const all=f.data||[];
+  const criticas=all.filter(x=>x.prioridad==='critico');
+  const alertas=all.filter(x=>x.prioridad==='alerta');
+  const normales=all.filter(x=>x.prioridad==='normal');
+  
+  function renderItem(f){
+    const badge=f.prioridad==='critico'?'<span class="badge" style="background:rgba(248,113,113,.2);color:#f7614f">🔴 Crítico</span>':
+                 f.prioridad==='alerta'?'<span class="badge" style="background:rgba(251,191,36,.2);color:#f7d44f">🟡 Alerta</span>':bdg(f.estado);
+    const tipoBadge=f.tipo_urgencia==='dian'?'<span class="badge b-revision">DIAN</span>':
+                    f.tipo_urgencia==='soporte'?'<span class="badge b-causada">Sin soporte</span>':
+                    f.tipo_urgencia==='revision'?'<span class="badge b-recibida">Sin revisar</span>':'';
+    return `<div class="tbl" style="cursor:pointer;padding:16px 20px;display:flex;align-items:center;gap:20px;border-left:4px solid ${f.prioridad==='critico'?'var(--danger)':f.prioridad==='alerta'?'var(--warning)':f.estado==='causada'?'#A78BFA':'var(--accent)'}" onclick="abrirF('${f.id}')">
+      <div style="flex:1"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono">${esc(f.numero_factura)}</span>${badge}${tipoBadge}</div>
       <div style="font-weight:500;margin-bottom:4px">${esc(f.proveedor_nombre||'Desconocido')}</div>
-      <div style="font-size:12px;color:var(--muted)">Área: ${esc(f.area_nombre||'Sin asignar')} · Recibida: ${fdate(f.recibida_en)}</div></div>
-      <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:8px"><div style="font-size:18px;font-weight:700">${fmt(f.valor_total||f.valor||0)}</div>${f.archivo_pdf?`<button onclick="event.stopPropagation();verPdf('${f.id}')" class="btn btn-secondary btn-sm">📄 PDF</button>`:''}<div style="font-size:12px;color:var(--muted)">Límite: ${fdate(f.limite_dian)}</div></div>
-    </div>`).join(''):'<div class="empty">No hay facturas pendientes ✓</div>'}</div>`;
+      <div style="font-size:12px;color:var(--muted)">${esc(f.area_nombre||'Sin área')} · Recibida: ${fdate(f.recibida_en)}</div></div>
+      <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:8px"><div style="font-size:18px;font-weight:700">${fmt(f.valor_total||f.valor||0)}</div>${f.archivo_pdf?`<button onclick="event.stopPropagation();verPdf('${f.id}')" class="btn btn-secondary btn-sm">📄 PDF</button>`:''}${f.limite_dian?`<div style="font-size:12px;color:${f.prioridad==='critico'?'var(--danger)':'var(--muted)'}">Límite: ${fdate(f.limite_dian)}</div>`:''}</div>
+    </div>`;
+  }
+  
+  $('content').innerHTML=`
+    <div class="page-header"><div><div class="page-title">Pendientes</div><div class="page-sub">${all.length} factura(s) requieren atención</div></div></div>
+    ${criticas.length?`<div style="margin-bottom:20px">
+      <div style="font-size:11px;text-transform:uppercase;color:var(--danger);font-weight:600;margin-bottom:10px">🔴 Críticas (vencen pronto)</div>
+      ${criticas.map(renderItem).join('')}
+    </div>`:''}
+    ${alertas.length?`<div style="margin-bottom:20px">
+      <div style="font-size:11px;text-transform:uppercase;color:var(--warning);font-weight:600;margin-bottom:10px">🟡 Alertas</div>
+      ${alertas.map(renderItem).join('')}
+    </div>`:''}
+    ${normales.length?`<div>
+      <div style="font-size:11px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:10px">Pendientes</div>
+      ${normales.map(renderItem).join('')}
+    </div>`:''}
+    ${all.length===0?'<div class="empty">No hay facturas pendientes ✓</div>':''}
+  `;
 }
 
 // ─── APROBACIONES ───────────────────────────────────────────────────────────
@@ -652,12 +817,18 @@ async function rCaus(){
 // ─── FACTURA DETALLE ─────────────────────────────────────────────────────────
 async function abrirF(id){
   const f=await api('GET',`/facturas/${id}`);
+  if(!S.areas.length)S.areas=await api('GET','/areas');
   const ei=EORD.indexOf(f.estado);
   const prog=EORD.map((e,i)=>{const d=i<=ei;return`<div style="display:flex;align-items:center"><div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:12px;height:12px;border-radius:50%;border:2px solid var(--border);background:${d?'var(--accent)':'var(--surface2)'};flex-shrink:0"></div><span style="font-size:10px;color:${d?'var(--accent)':'var(--muted)'};margin-top:4px">${EM[e]?.l||e}</span></div>${i<EORD.length-1?`<div style="width:24px;height:2px;background:${d?'var(--accent)':'var(--border)'}"></div>`:''}</div>`}).join('');
   const acc=[];
-  if(['recibida','revision'].includes(f.estado)){acc.push(`<button class="btn btn-success btn-sm" onclick="acF('${id}','aprobar')">✓ Aprobar</button>`);acc.push(`<button class="btn btn-danger btn-sm" onclick="acF('${id}','rechazar')">✗ Rechazar</button>`);}
+  if(['recibida','revision'].includes(f.estado)){acc.push(`<button class="btn btn-success btn-sm" onclick="mAprobar('${id}')">✓ Aprobar</button>`);acc.push(`<button class="btn btn-danger btn-sm" onclick="acF('${id}','rechazar')">✗ Rechazar</button>`);}
   if(f.estado==='aprobada')acc.push(`<button class="btn btn-success btn-sm" onclick="acF('${id}','causar')">📥 Causar</button>`);
-  if(f.estado==='causada')acc.push(`<button class="btn btn-primary btn-sm" onclick="acF('${id}','pagar')">✓ Marcar pagada</button>`);
+  const isTesorero=['admin','tesorero'].includes(S.usuario?.rol);
+  if(f.estado==='causada'&&isTesorero){
+    if(!f.soporte_pago)acc.push(`<button class="btn btn-warning btn-sm" onclick="mSubirSoporte('${id}')">📤 Adjuntar soporte</button>`);
+    if(f.soporte_pago)acc.push(`<button class="btn btn-secondary btn-sm" onclick="verSoporte('${id}')">📎 Ver soporte</button>`);
+    acc.push(`<button class="btn btn-primary btn-sm" onclick="mPagar('${id}')">✓ Marcar pagada</button>`);
+  }
   showM(`Factura ${f.numero_factura}`,`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Proveedor</div><div style="font-weight:600;margin-top:4px">${esc(f.proveedor_nombre||f.nombre_emisor||'—')}</div></div>
@@ -666,11 +837,17 @@ async function abrirF(id){
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">IVA</div><div style="font-weight:600;margin-top:4px">${fmt(f.valor_iva||0)}</div></div>
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Fecha factura</div><div style="font-weight:500;margin-top:4px">${fdate(f.fecha_factura||f.recibida_en)}</div></div>
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Estado</div><div style="margin-top:4px">${bdg(f.estado)}</div></div>
+      <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Centro de operación</div><div style="font-weight:600;margin-top:4px">${esc(f.centro_operacion_nombre||'—')}</div></div>
+      <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Área</div><div style="font-weight:500;margin-top:4px">${esc(f.area_nombre||'—')}</div></div>
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Categoría</div><div style="margin-top:4px">${ctag(f.categoria_color,f.categoria_nombre)}</div></div>
-      <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Área</div><div style="font-weight:500;margin-top:4px">${esc(f.area_nombre||'Sin asignar')}</div></div>
+      ${f.centro_costos?`<div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Centro de costos</div><div style="font-weight:600;margin-top:4px">${esc(f.centro_costos)}</div></div>`:''}
+      ${f.referencia?`<div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Orden de compra</div><div style="font-weight:500;margin-top:4px">${esc(f.referencia)}</div></div>`:''}
+      ${f.descripcion_gasto?`<div style="grid-column:1/-1;background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Descripción del gasto</div><div style="margin-top:4px">${esc(f.descripcion_gasto)}</div></div>`:''}
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Recibida</div><div style="font-weight:500;margin-top:4px">${fdate(f.recibida_en)}</div></div>
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Límite DIAN</div><div style="font-weight:500;margin-top:4px;color:${f.dian_tacita?'var(--warning)':'inherit'}">${fdate(f.limite_dian)}${f.dian_tacita?' (tácita)':''}</div></div>
       ${f.cufe?`<div style="grid-column:1/-1;background:var(--surface2);padding:10px 12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">CUFE</div><div style="font-family:monospace;font-size:11px;margin-top:4px;word-break:break-all">${esc(f.cufe)}</div></div>`:''}
+      ${f.soporte_pago?`<div style="grid-column:1/-1;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--success);text-transform:uppercase;letter-spacing:.5px;font-weight:600">✓ Soporte de pago adjunto</div><div style="color:var(--muted);font-size:13px;margin-top:4px">${esc(f.soporte_pago_nombre||f.soporte_pago)}</div></div>`:''}
+      ${f.pagada_en?`<div style="grid-column:1/-1;background:rgba(110,231,183,.1);border:1px solid rgba(110,231,183,.2);padding:12px;border-radius:8px"><div style="font-size:10px;color:#6EE7B7;text-transform:uppercase;letter-spacing:.5px;font-weight:600">✓ Pagada</div><div style="color:var(--muted);font-size:13px;margin-top:4px">${fdate(f.pagada_en)}</div></div>`:''}
     </div>
     ${f.motivo_rechazo?`<div style="background:rgba(248,113,113,.1);border-left:3px solid var(--danger);padding:12px;border-radius:0 8px 8px 0;margin-bottom:16px"><div style="font-size:11px;color:var(--danger);text-transform:uppercase;letter-spacing:.5px;font-weight:600">Motivo de rechazo</div><div style="color:var(--danger);margin-top:4px">${esc(f.motivo_rechazo)}</div></div>`:''}
     <div style="margin-bottom:16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Progreso del flujo</div><div style="display:flex;align-items:center;overflow-x:auto;padding-bottom:4px">${prog}</div></div>
@@ -680,6 +857,56 @@ async function abrirF(id){
     </div></div>
     <div class="modal-footer">${f.archivo_pdf?`<button onclick="verPdf('${id}')" class="btn btn-secondary btn-sm">📄 Ver PDF</button>`:''}<button class="btn btn-secondary btn-sm" onclick="closeM()">Cerrar</button>${acc.join('')}</div>`,640);
 }
+
+async function mAprobar(id){
+  const f=await api('GET',`/facturas/${id}`);
+  if(!S.centros)S.centros=await api('GET','/centros');
+  const ao=S.areas.map(a=>`<option value="${a.id}" ${f.area_responsable_id===a.id?'selected':''}>${esc(a.nombre)}</option>`).join('');
+  const co=S.centros.map(c=>`<option value="${c.id}" ${f.centro_operacion_id===c.id?'selected':''}>${esc(c.nombre)}</option>`).join('');
+  const ordenDelXml=f.orden_compra?`<div style="font-size:11px;color:var(--success);margin-top:4px">✓ Orden de compra detectada del XML: <strong>${esc(f.orden_compra)}</strong></div>`:'';
+  showM('Información de aprobación',`
+    <div style="margin-bottom:16px;padding:12px;background:rgba(79,142,247,.1);border-radius:8px;border:1px solid rgba(79,142,247,.2)">
+      <div style="font-size:12px;color:var(--muted)">Factura</div>
+      <div style="font-weight:700;font-size:16px">${esc(f.numero_factura)}</div>
+      <div style="font-size:14px;margin-top:4px">${esc(f.proveedor_nombre||f.nombre_emisor||'—')}</div>
+      <div style="font-size:20px;font-weight:700;color:var(--accent);margin-top:8px">${fmt(f.valor_total||0)}</div>
+      ${ordenDelXml}
+    </div>
+    <div class="form-grid">
+      <div class="field"><label>CENTRO DE OPERACIÓN *</label><select id="ap-centro"><option value="">— Seleccionar centro —</option>${co}</select></div>
+      <div class="field"><label>ÁREA DE DESTINO *</label><select id="ap-area"><option value="">— Seleccionar área —</option>${ao}</select></div>
+    </div>
+    <div class="form-grid">
+      <div class="field"><label>CENTRO DE COSTOS</label><input type="text" id="ap-cc" value="${esc(f.centro_costos||'')}" placeholder="Ej: CC-001"/></div>
+      <div class="field"><label>ORDEN DE COMPRA / REFERENCIA</label><input type="text" id="ap-ref" value="${esc(f.orden_compra||f.referencia||'')}" placeholder="OC-2025-0042"/></div>
+    </div>
+    <div class="field"><label>DESCRIPCIÓN DEL GASTO</label><textarea id="ap-desc" rows="3" placeholder="Ej: Compra de teclado ergonomic para el area de sistemas...">${esc(f.descripcion_gasto||'')}</textarea></div>
+    <div class="field"><label>COMENTARIO (Opcional)</label><textarea id="ap-com" rows="2" placeholder="Observaciones adicionales..."></textarea></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM()">Cancelar</button><button class="btn btn-success" onclick="doAprobar('${id}')">✓ Confirmar aprobación</button></div>
+  `,560);
+}
+
+async function doAprobar(id){
+  const centro_id=$('ap-centro')?.value;
+  const area_id=$('ap-area')?.value;
+  if(!centro_id){toast('Selecciona el centro de operación','error');return}
+  if(!area_id){toast('Selecciona el área de destino','error');return}
+  const b={
+    centro_operacion_id:centro_id,
+    area_responsable_id:area_id,
+    centro_costos:$('ap-cc')?.value?.trim()||null,
+    descripcion_gasto:$('ap-desc')?.value?.trim()||null,
+    referencia:$('ap-ref')?.value?.trim()||null,
+    comentario:$('ap-com')?.value?.trim()||null
+  };
+  try{
+    await api('PATCH',`/facturas/${id}/aprobar`,b);
+    closeM();
+    toast('Factura aprobada','success');
+    goTo(S.view);
+  }catch(e){toast(e.message,'error')}
+}
+
 async function acF(id,a){
   let b={};
   if(a==='rechazar'){const m=prompt('Motivo del rechazo:');if(!m)return;b={motivo:m};}
@@ -718,6 +945,45 @@ async function mNuevaF(){
     <div class="field"><label>OBSERVACIONES</label><textarea id="fn-ob" rows="2" placeholder="Notas adicionales..."></textarea></div>
     <div class="field"><label>ARCHIVO PDF</label><input id="fn-pdf" type="file" accept=".pdf" style="color:var(--text)"/></div>
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM()">Cancelar</button><button class="btn btn-primary" onclick="gF()">Crear factura</button></div>`,560);
+}
+
+// ─── SOPORTE DE PAGO ────────────────────────────────────────────────────────
+function mSubirSoporte(id){
+  showM('Adjuntar soporte de pago',`
+    <div style="padding:8px 0">
+      <p style="color:var(--muted);margin-bottom:16px">Adjunta el comprobante de pago (transferencia, screenshot, etc.)</p>
+      <div class="field"><label>ARCHIVO (PDF, PNG, JPG)</label><input type="file" id="sp-archivo" accept=".pdf,.png,.jpg,.jpeg,.gif" style="color:var(--text)"/></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">Formatos: PDF, PNG, JPG, GIF. Máximo 10MB.</div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM()">Cancelar</button><button class="btn btn-primary" onclick="doSubirSoporte('${id}')">Subir archivo</button></div>
+  `,400);
+}
+
+async function doSubirSoporte(id){
+  const fileInput=$('sp-archivo');
+  if(!fileInput?.files?.length){toast('Selecciona un archivo','error');return}
+  const file=fileInput.files[0];
+  const fd=new FormData();
+  fd.append('soporte',file);
+  try{
+    await api('POST',`/facturas/${id}/soporte-pago`,fd,true);
+    closeM();
+    toast('Soporte adjuntado','success');
+    abrirF(id);
+  }catch(e){toast(e.message,'error')}
+}
+
+function verSoporte(id){window.open(`/api/facturas/${id}/soporte-pago`,'_blank')}
+
+function mPagar(id){
+  showM('Confirmar pago',`
+    <div style="padding:8px 0;text-align:center">
+      <div style="font-size:48px;margin-bottom:16px">💰</div>
+      <p style="color:var(--muted);margin-bottom:8px">¿Confirmar que esta factura ha sido pagada?</p>
+      <p style="font-size:13px;color:var(--muted)">Esta acción registrará la fecha de pago y moverá la factura a estado "Pagada".</p>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM()">Cancelar</button><button class="btn btn-primary" onclick="acF('${id}','pagar')">✓ Confirmar pago</button></div>
+  `,380);
 }
 
 // ─── CATEGORÍAS ─────────────────────────────────────────────────────────────
@@ -773,54 +1039,707 @@ async function delCat(id){if(!confirm('¿Desactivar esta categoría?'))return;tr
 // ─── ÁREAS ──────────────────────────────────────────────────────────────────
 async function rAreas(){
   S.areas=await api('GET','/areas');
+  const isAdmin=S.usuario?.rol==='admin';
   $('content').innerHTML=`<div class="page-header"><div><div class="page-title">Áreas</div><div class="page-sub">Unidades organizativas</div></div><button class="btn btn-primary" onclick="mArea()">+ Nueva área</button></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px">
-      ${S.areas.map(a=>`<div class="tbl" style="padding:20px"><div style="font-weight:700;font-size:15px;margin-bottom:10px">${esc(a.nombre)}</div><div style="font-size:13px;color:var(--muted)">Jefe: ${esc(a.jefe_nombre||'—')}</div>${a.email?`<div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(a.email)}</div>`:''}</div>`).join('')}
+      ${S.areas.map(a=>`<div class="tbl" style="padding:20px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+          <div style="font-weight:700;font-size:15px">${esc(a.nombre)}</div>
+          <span class="badge ${a.activo?'b-aprobada':'b-rechazada'}" style="font-size:10px">${a.activo?'Activa':'Inactiva'}</span>
+        </div>
+        <div style="font-size:13px;color:var(--muted)">Jefe: ${esc(a.jefe_nombre||'—')}</div>
+        ${a.email?`<div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(a.email)}</div>`:''}
+        ${isAdmin?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="mArea('${a.id}')">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="delArea('${a.id}','${esc(a.nombre)}')">🗑️</button>
+        </div>`:''}
+      </div>`).join('')}
     </div>`;
 }
-function mArea(){
-  window.saveArea=async()=>{const n=$('an').value.trim();if(!n){toast('Nombre requerido','error');return}try{await api('POST','/areas',{nombre:n,jefe_nombre:$('aj').value.trim()||null,email:$('ae').value.trim()||null});closeM();toast('Área creada','success');await rAreas()}catch(e){toast(e.message,'error')}};
-  showM('Nueva área',`<div class="field"><label>NOMBRE *</label><input id="an" placeholder="Ej: Sistemas"/></div><div class="field"><label>JEFE</label><input id="aj" placeholder="Nombre del responsable"/></div><div class="field"><label>CORREO</label><input id="ae" type="email" placeholder="area@vitamar.com"/></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeM()">Cancelar</button><button class="btn btn-primary" onclick="saveArea()">Crear</button></div>`,400);
+
+async function mArea(id){
+  let area=null;
+  if(id){
+    area=S.areas.find(a=>a.id===id);
+    if(!area)return;
+  }
+  if(!S.usuariosList){
+    try{const u=await api('GET','/usuarios/simple');S.usuariosList=u;}catch(e){S.usuariosList=[]}
+  }
+  window.saveArea=async()=>{
+    const n=$('an')?.value?.trim();
+    if(!n){toast('Nombre requerido','error');return}
+    try{
+      if(id){
+        await api('PUT',`/areas/${id}`,{
+          nombre:n,
+          jefe_id:$('aj')?.value||null,
+          email:$('ae')?.value?.trim()||null,
+          activo:$('aa-activo')?.checked??true
+        });
+      }else{
+        await api('POST','/areas',{
+          nombre:n,
+          jefe_id:$('aj')?.value||null,
+          email:$('ae')?.value?.trim()||null
+        });
+      }
+      closeM();
+      toast(id?'Área actualizada':'Área creada','success');
+      rAreas();
+    }catch(e){toast(e.message,'error')}
+  };
+  const opts=S.usuariosList.map(u=>`<option value="${u.id}" ${area?.jefe_id===u.id?'selected':''}>${esc(u.nombre)}</option>`).join('');
+  showM(id?'Editar área':'Nueva área',`
+    <div class="field"><label>NOMBRE *</label><input id="an" value="${esc(area?.nombre||'')}" placeholder="Ej: Sistemas"/></div>
+    <div class="field"><label>JEFE</label><select id="aj"><option value="">— Sin asignar —</option>${opts}</select></div>
+    <div class="field"><label>CORREO</label><input id="ae" type="email" value="${esc(area?.email||'')}" placeholder="area@vitamar.com"/></div>
+    ${id?`<div class="field"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="aa-activo" ${area?.ativo!==false?'checked':''}/> Área activa</label></div>`:''}
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM()">Cancelar</button><button class="btn btn-primary" onclick="saveArea()">Guardar</button></div>
+  `,400);
+}
+
+async function delArea(id,nombre){
+  if(!confirm(`¿Eliminar el área "${nombre}"?`))return;
+  try{
+    await api('DELETE',`/areas/${id}`);
+    toast('Área eliminada','success');
+    rAreas();
+  }catch(e){toast(e.message,'error')}
 }
 
 // ─── USUARIOS ────────────────────────────────────────────────────────────────
 async function rUsers(){
-  const us=await api('GET','/usuarios');S.areas=await api('GET','/areas');
-  $('content').innerHTML=`<div class="page-header"><div><div class="page-title">Usuarios</div><div class="page-sub">Gestión de accesos</div></div><button class="btn btn-primary" onclick="mUser()">+ Nuevo</button></div>
+  const [us, areas, cats] = await Promise.all([
+    api('GET','/usuarios'),
+    api('GET','/areas'),
+    api('GET','/categorias')
+  ]);
+  S.areas=areas;
+  S.cats=cats;
+  const isAdmin=S.usuario?.rol==='admin';
+  $('content').innerHTML=`<div class="page-header"><div><div class="page-title">Usuarios</div><div class="page-sub">Gestión de accesos y permisos</div></div><button class="btn btn-primary" onclick="mUser()">+ Nuevo</button></div>
     <div class="tbl">
-      <table><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Área</th><th>Último acceso</th><th>Estado</th></tr></thead>
-      <tbody>${us.map(u=>`<tr><td style="font-weight:500">${esc(u.nombre)}</td><td style="color:var(--muted)">${esc(u.email)}</td><td><span class="tag">${u.rol}</span></td><td style="color:var(--muted)">${esc(u.area_nombre||'—')}</td><td style="color:var(--muted)">${u.ultimo_acceso?fdate(u.ultimo_acceso):'Nunca'}</td><td><span class="badge ${u.activo?'b-aprobada':'b-rechazada'}">${u.activo?'Activo':'Inactivo'}</span></td></tr>`).join('')}</tbody></table>
+      <table><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Área</th><th>Último acceso</th><th>Estado</th><th></th></tr></thead>
+      <tbody>${us.map(u=>`<tr>
+        <td style="font-weight:500">${esc(u.nombre)}</td>
+        <td style="color:var(--muted)">${esc(u.email)}</td>
+        <td><span class="tag">${u.rol}</span></td>
+        <td style="color:var(--muted)">${esc(u.area_nombre||'—')}</td>
+        <td style="color:var(--muted)">${u.ultimo_acceso?fdate(u.ultimo_acceso):'Nunca'}</td>
+        <td><span class="badge ${u.activo?'b-aprobada':'b-rechazada'}">${u.activo?'Activo':'Inactivo'}</span></td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-secondary btn-sm" onclick="mUser('${u.id}')">✏️</button>
+          ${isAdmin&&u.id!==S.usuario?.id?(u.activo?
+            `<button class="btn btn-warning btn-sm" onclick="toggleUser('${u.id}',false)" title="Inactivar">⛔</button>`:
+            `<button class="btn btn-success btn-sm" onclick="toggleUser('${u.id}',true)" title="Activar">✅</button>`):''}
+          ${isAdmin&&u.id!==S.usuario?.id?`<button class="btn btn-danger btn-sm" onclick="delUser('${u.id}','${esc(u.nombre)}')" title="Eliminar">🗑️</button>`:''}
+        </td>
+      </tr>`).join('')}</tbody></table>
     </div>`;
 }
-function mUser(){
-  const ao=S.areas.map(a=>`<option value="${a.id}">${esc(a.nombre)}</option>`).join('');
-  window.saveUser=async()=>{try{await api('POST','/usuarios',{nombre:$('un').value.trim(),email:$('ue').value.trim(),password:$('up').value,rol:$('ur').value,area_id:$('ua').value||null});closeM();toast('Usuario creado','success');await rUsers()}catch(e){toast(e.message,'error')}};
-  showM('Nuevo usuario',`<div class="field"><label>NOMBRE *</label><input id="un" placeholder="Nombre completo"/></div><div class="field"><label>EMAIL *</label><input id="ue" type="email" placeholder="user@vitamar.com"/></div><div class="field"><label>CONTRASEÑA *</label><input id="up" type="password" placeholder="••••••••"/></div><div class="form-grid"><div class="field"><label>ROL</label><select id="ur"><option value="comprador">Comprador</option><option value="contador">Contador</option><option value="tesorero">Tesorero</option><option value="auditor">Auditor</option><option value="admin">Admin</option></select></div><div class="field"><label>ÁREA</label><select id="ua"><option value="">— Sin área —</option>${ao}</select></div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeM()">Cancelar</button><button class="btn btn-primary" onclick="saveUser()">Crear</button></div>`,480);
+
+async function toggleUser(id,activo){
+  try{
+    await api('PUT',`/usuarios/${id}`,{activo});
+    toast(activo?'Usuario activado':'Usuario inactivado','success');
+    rUsers();
+  }catch(e){toast(e.message,'error')}
 }
+
+async function delUser(id,nombre){
+  if(!confirm(`¿Eliminar definitivamente al usuario "${nombre}"?`))return;
+  try{
+    await api('DELETE',`/usuarios/${id}`);
+    toast('Usuario eliminado','success');
+    rUsers();
+  }catch(e){toast(e.message,'error')}
+}
+
+async function mUser(id){
+  let usr=null;
+  if(id){
+    const us=await api('GET','/usuarios');
+    usr=us.find(u=>u.id===id);
+    if(!usr)return;
+  }
+  if(!S.cats)S.cats=await api('GET','/categorias/todas');
+  const ao=S.areas.map(a=>`<option value="${a.id}" ${usr?.area_id===a.id?'selected':''}>${esc(a.nombre)}</option>`).join('');
+  const catsIds=usr?.categoria_ids||[];
+  const co=S.cats.map(c=>`<div class="cat-item" onclick="togCatU('${c.id}')">
+    <div class="cat-check" id="cc-${c.id}">${catsIds.includes(c.id)?'✓':''}</div>
+    <div class="cat-dot" style="background:${c.color}"></div>
+    <div class="cat-name">${esc(c.nombre)}</div>
+    <input type="checkbox" class="ucat" value="${c.id}" ${catsIds.includes(c.id)?'checked':''} style="display:none"/>
+  </div>`).join('');
+  
+  window.saveUser=async()=>{
+    const catIds=[...document.querySelectorAll('.ucat:checked')].map(el=>el.value);
+    try{
+      if(id){
+        await api('PUT',`/usuarios/${id}`,{
+          nombre:$('un')?.value?.trim(),
+          email:$('ue')?.value?.trim(),
+          rol:$('ur')?.value,
+          area_id:$('ua')?.value||null,
+          activo:$('ua-activo')?.checked??true,
+          password:$('up')?.value||null
+        });
+        await api('PUT',`/categorias/usuario/${id}`,{categoria_ids:catIds});
+      }else{
+        await api('POST','/usuarios',{
+          nombre:$('un')?.value?.trim(),
+          email:$('ue')?.value?.trim(),
+          password:$('up')?.value,
+          rol:$('ur')?.value,
+          area_id:$('ua')?.value||null
+        });
+      }
+      closeM();
+      toast('Usuario guardado','success');
+      await rUsers();
+    }catch(e){toast(e.message,'error')}
+  };
+  
+  showM(id?'Editar usuario':'Nuevo usuario',`
+    <div class="field"><label>NOMBRE *</label><input id="un" value="${esc(usr?.nombre||'')}" placeholder="Nombre completo"/></div>
+    <div class="field"><label>EMAIL *</label><input id="ue" type="email" value="${esc(usr?.email||'')}" placeholder="user@vitamar.com"/></div>
+    <div class="field"><label>CONTRASEÑA ${id?'(dejar vacío para no cambiar)':''}</label><input id="up" type="password" placeholder="••••••••"/></div>
+    <div class="form-grid">
+      <div class="field"><label>ROL</label><select id="ur"><option value="comprador" ${usr?.rol==='comprador'?'selected':''}>Comprador</option><option value="contador" ${usr?.rol==='contador'?'selected':''}>Contador</option><option value="tesorero" ${usr?.rol==='tesorero'?'selected':''}>Tesorero</option><option value="auditor" ${usr?.rol==='auditor'?'selected':''}>Auditor</option><option value="admin" ${usr?.rol==='admin'?'selected':''}>Admin</option></select></div>
+      <div class="field"><label>ÁREA</label><select id="ua"><option value="">— Sin área —</option>${ao}</select></div>
+    </div>
+    ${id?`<div class="field"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ua-activo" ${usr?.activo!==false?'checked':''}/> Usuario activo</label></div>`:''}
+    <div style="margin-top:16px"><div style="font-size:11px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">CATEGORÍAS PERMITIDAS</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto">${co}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">Selecciona las categorías que puede ver. Sin selección: ve según su área.</div></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM()">Cancelar</button><button class="btn btn-primary" onclick="saveUser()">Guardar</button></div>
+  `,560);
+}
+
+window.togCatU=function(id){
+  const cb=$('cc-'+id)?.parentElement.querySelector('.ucat');
+  if(!cb)return;
+  cb.checked=!cb.checked;
+  const el=$('cc-'+id);
+  if(el)el.textContent=cb.checked?'✓':'';
+};
 
 // ─── BACKUP ─────────────────────────────────────────────────────────────────
 async function rBackup(){
-  $('content').innerHTML=`<div class="page-header"><div><div class="page-title">Backup</div><div class="page-sub">Respaldo y restauración de datos</div></div><button class="btn btn-primary" onclick="generarBackup()">+ Generar backup</button></div>
-    <div class="tbl">
-      <div class="tbl-head"><div class="tbl-title">Backups disponibles</div></div>
-      <table><thead><tr><th>Archivo</th><th>Tamaño</th><th>Fecha</th><th>Acciones</th></tr></thead>
-      <tbody id="backup-list"><tr><td colspan="4" class="empty">Cargando...</td></tr></tbody>
+  $('content').innerHTML=`
+    <div class="page-header"><div><div class="page-title">Backup y Restauración</div><div class="page-sub">Exporta o restaura toda la información del sistema</div></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;">
+        <div style="font-weight:700;font-size:16px;margin-bottom:6px;">📦 Exportar Backup</div>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:20px;line-height:1.6;">
+          Descarga un archivo <strong style="color:var(--text)">ZIP</strong> con toda la información del sistema.
+          Incluye un <code style="color:var(--accent)">backup.json</code> para restaurar.
+        </p>
+        <div style="background:var(--surface2);border-radius:10px;padding:16px;margin-bottom:20px;font-size:13px;">
+          <div style="font-weight:600;margin-bottom:10px;">El backup incluye:</div>
+          <div style="display:flex;flex-direction:column;gap:6px;color:var(--muted);">
+            <span>✓ Facturas y proveedores</span>
+            <span>✓ Categorías y áreas</span>
+            <span>✓ Usuarios del sistema</span>
+            <span>✓ Centros de operación</span>
+            <span>✓ Configuración IMAP/SMTP</span>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="btn-descargar-backup" onclick="descargarBackup()" style="width:100%;justify-content:center;padding:13px;">💾 Descargar Backup ZIP</button>
+        <div id="backup-ok" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(79,190,150,0.1);border:1px solid rgba(79,190,150,0.3);border-radius:9px;font-size:13px;color:var(--success);">✓ Backup generado y descargado correctamente.</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;">
+        <div style="font-weight:700;font-size:16px;margin-bottom:6px;">♻️ Restaurar Backup</div>
+        <div style="background:rgba(231,76,60,0.06);border:1px solid rgba(231,76,60,0.2);border-radius:10px;padding:14px;margin-bottom:20px;font-size:12px;color:var(--danger);">
+          ⚠ Los datos actuales serán reemplazados por los del backup. Tu usuario administrador actual no será afectado.
+        </div>
+        <div style="margin-bottom:20px;">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
+            <span>📁 Backups en el Servidor</span>
+            <button class="btn btn-secondary btn-sm" onclick="cargarListaBackups()">🔄 Actualizar</button>
+          </div>
+          <div id="lista-backups-loading" style="text-align:center;padding:16px;color:var(--muted);font-size:13px;">Cargando...</div>
+          <div id="lista-backups-none" style="display:none;text-align:center;padding:16px;color:var(--muted);font-size:12px;background:var(--surface2);border-radius:9px;">🕐 No hay backups disponibles</div>
+          <div id="lista-backups-body" style="display:none;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;"></div>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:20px;">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px;">📂 Restaurar desde Archivo</div>
+          <p style="color:var(--muted);font-size:12px;margin-bottom:14px;line-height:1.6;">
+            Sube un <strong style="color:var(--text)">.zip</strong> generado por Vitamar Docs.
+          </p>
+          <div id="restore-drop" onclick="document.getElementById('restore-file').click()"
+            style="border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer;margin-bottom:12px;transition:border-color 0.2s;"
+            onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'"
+            ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+            ondragleave="this.style.borderColor='var(--border)'"
+            ondrop="handleRestoreDrop(event)">
+            <div style="font-size:28px;margin-bottom:6px;">📂</div>
+            <div style="font-size:13px;color:var(--muted);">Clic o arrastra tu archivo <strong style="color:var(--text)">.zip</strong></div>
+            <div id="restore-filename" style="margin-top:6px;font-size:12px;color:var(--accent);display:none;"></div>
+          </div>
+          <input type="file" id="restore-file" accept=".zip" style="display:none"/>
+          <button class="btn btn-danger" id="btn-restaurar" onclick="restaurarBackup()" disabled style="width:100%;justify-content:center;padding:11px;opacity:0.5;">
+            ♻️ Restaurar desde Archivo
+          </button>
+        </div>
+        <div id="restore-ok" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(79,190,150,0.1);border:1px solid rgba(79,190,150,0.3);border-radius:9px;font-size:13px;color:var(--success);"></div>
+        <div id="restore-err" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:9px;font-size:13px;color:var(--danger);"></div>
+      </div>
     </div>`;
-  await cargarBackups();
+  initBackupListeners();
+  cargarListaBackups();
 }
-async function cargarBackups(){
+
+let _backupListenerInit=false;
+let restoreFile=null;
+
+function initBackupListeners(){
+  if(_backupListenerInit)return;
+  _backupListenerInit=true;
+  const inp=document.getElementById('restore-file');
+  if(inp){
+    inp.addEventListener('change',function(){
+      restoreFile=this.files[0];
+      document.getElementById('restore-filename').textContent='📄 '+restoreFile.name;
+      document.getElementById('restore-filename').style.display='block';
+      document.getElementById('btn-restaurar').disabled=false;
+      document.getElementById('btn-restaurar').style.opacity='1';
+      document.getElementById('restore-ok').style.display='none';
+      document.getElementById('restore-err').style.display='none';
+    });
+  }
+}
+
+function handleRestoreDrop(e){
+  e.preventDefault();
+  document.getElementById('restore-drop').style.borderColor='var(--border)';
+  const file=e.dataTransfer.files[0];
+  if(file&&file.name.endsWith('.zip')){
+    restoreFile=file;
+    document.getElementById('restore-filename').textContent='📄 '+restoreFile.name;
+    document.getElementById('restore-filename').style.display='block';
+    document.getElementById('btn-restaurar').disabled=false;
+    document.getElementById('btn-restaurar').style.opacity='1';
+  }
+}
+
+async function descargarBackup(){
+  const btn=document.getElementById('btn-descargar-backup');
+  btn.disabled=true;btn.textContent='Generando...';
+  try{
+    const token=localStorage.getItem('vd_t');
+    const resp=await fetch('/api/backup',{headers:{Authorization:`Bearer ${token}`}});
+    if(!resp.ok){
+      const j=await resp.json().catch(()=>({}));
+      throw new Error(j.error||'Error');
+    }
+    const blob=await resp.blob();
+    const fecha=new Date().toISOString().slice(0,10);
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='vitamar_backup_'+fecha+'.zip';a.click();
+    URL.revokeObjectURL(a.href);
+    document.getElementById('backup-ok').style.display='block';
+    setTimeout(()=>{document.getElementById('backup-ok').style.display='none'},5000);
+  }catch(e){toast(e.message,'error')}
+  btn.disabled=false;btn.textContent='💾 Descargar Backup ZIP';
+}
+
+async function cargarListaBackups(){
+  const loading=document.getElementById('lista-backups-loading');
+  const none=document.getElementById('lista-backups-none');
+  const body=document.getElementById('lista-backups-body');
+  loading.style.display='block';none.style.display='none';body.style.display='none';
   try{
     const lista=await api('GET','/backup/lista');
-    const tbody=$('backup-list');
-    if(!lista.length){tbody.innerHTML='<tr><td colspan="4" class="empty">Sin backups. Genera el primero.</td></tr>';return}
-    tbody.innerHTML=lista.map(b=>`<tr><td style="font-weight:500">${esc(b.nombre)}</td><td>${(b.tamano/1024/1024).toFixed(2)} MB</td><td style="color:var(--muted)">${fdate(b.fecha)}</td><td><button class="btn btn-secondary btn-sm" onclick="descargarBackup('${esc(b.nombre)}')">⬇ Descargar</button> <button class="btn btn-danger btn-sm" onclick="eliminarBackup('${esc(b.nombre)}')">🗑️</button></td></tr>`).join('');
-  }catch(e){$('backup-list').innerHTML=`<tr><td colspan="4" class="empty" style="color:var(--danger)">Error: ${e.message}</td></tr>`}
+    loading.style.display='none';
+    if(!lista.length){none.style.display='block';return}
+    body.style.display='flex';
+    body.innerHTML=lista.map(b=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface2);border-radius:8px;font-size:13px;">
+        <div>
+          <div style="font-weight:500">${esc(b.nombre)}</div>
+          <div style="color:var(--muted);font-size:11px">${(b.tamano/1024/1024).toFixed(2)} MB — ${fdate(b.fecha)}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-secondary btn-sm" onclick="descargarBackupLocal('${esc(b.nombre)}')">⬇</button>
+          <button class="btn btn-danger btn-sm" onclick="restaurarBackupLocal('${esc(b.nombre)}')">♻️</button>
+          <button class="btn btn-secondary btn-sm" onclick="eliminarBackup('${esc(b.nombre)}')">🗑️</button>
+        </div>
+      </div>`).join('');
+  }catch(e){
+    loading.style.display='none';
+    none.style.display='block';none.textContent='Error: '+e.message;
+  }
 }
-async function generarBackup(){
-  try{toast('Generando backup...','info');const r=await api('GET','/backup/generar');toast('Backup generado: '+r.archivo,'success');await cargarBackups()}catch(e){toast(e.message,'error')}
+
+async function descargarBackupLocal(n){
+  try{
+    const token=localStorage.getItem('vd_t');
+    const resp=await fetch('/api/backup/descargar/'+encodeURIComponent(n),{headers:{Authorization:`Bearer ${token}`}});
+    if(!resp.ok)throw new Error('Error descargando');
+    const blob=await resp.blob();
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=n;a.click();
+    URL.revokeObjectURL(a.href);
+  }catch(e){toast(e.message,'error')}
 }
-function descargarBackup(n){window.open(`/api/backup/descargar/${n}`,'_blank')}
-async function eliminarBackup(n){if(!confirm('¿Eliminar este backup?'))return;try{await api('DELETE',`/backup/${n}`);toast('Backup eliminado','success');await cargarBackups()}catch(e){toast(e.message,'error')}}
+
+async function restaurarBackupLocal(n){
+  if(!confirm('¿Restaurar el backup "'+n+'"?\n\nLos datos actuales serán reemplazados. Tu sesión no se verá afectada.'))return;
+  const ok=document.getElementById('restore-ok');
+  const err=document.getElementById('restore-err');
+  ok.style.display='none';err.style.display='none';
+  try{
+    const token=localStorage.getItem('vd_t');
+    const resp=await fetch('/api/backup/restore/local/'+encodeURIComponent(n),{
+      method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({})
+    });
+    const j=await resp.json();
+    if(!resp.ok)throw new Error(j.error||'Error');
+    ok.textContent='✓ Restauración completada correctamente';
+    ok.style.display='block';
+    setTimeout(()=>{ok.style.display='none'},5000);
+  }catch(e){
+    err.textContent='Error: '+e.message;
+    err.style.display='block';
+  }
+}
+
+async function restaurarBackup(){
+  if(!restoreFile)return;
+  const archivoARestaurar=restoreFile;
+  const ok=document.getElementById('restore-ok');
+  const err=document.getElementById('restore-err');
+  ok.style.display='none';err.style.display='none';
+  if(!confirm('¿Restaurar el backup "'+archivoARestaurar.name+'"?\n\nLos datos actuales serán reemplazados.'))return;
+  try{
+    const token=localStorage.getItem('vd_t');
+    const form=new FormData();
+    form.append('backup',archivoARestaurar);
+    const resp=await fetch('/api/backup/restore',{method:'POST',headers:{Authorization:`Bearer ${token}`},body:form});
+    const j=await resp.json();
+    if(!resp.ok)throw new Error(j.error||'Error');
+    ok.textContent='✓ Restauración completada correctamente';
+    ok.style.display='block';
+    restoreFile=null;
+    document.getElementById('restore-file').value='';
+    document.getElementById('restore-filename').style.display='none';
+    document.getElementById('btn-restaurar').disabled=true;
+    document.getElementById('btn-restaurar').style.opacity='0.5';
+    await cargarListaBackups();
+  }catch(e){
+    err.textContent='Error: '+e.message;
+    err.style.display='block';
+  }
+}
+
+async function eliminarBackup(n){if(!confirm('¿Eliminar este backup?'))return;try{await api('DELETE',`/backup/${n}`);toast('Backup eliminado','success');await cargarListaBackups()}catch(e){toast(e.message,'error')}}
+
+// ─── CONFIGURACIÓN ─────────────────────────────────────────────────────────
+let cfgTabs='imap';
+async function rConfig(){
+  const cfg=await api('GET','/configuracion');
+  $('content').innerHTML=`
+    <div class="page-header"><div><div class="page-title">Configuración</div><div class="page-sub">Parámetros del sistema</div></div></div>
+    
+    <div style="display:flex;gap:6px;margin-bottom:20px">
+      <button class="fb${cfgTabs==='imap'?' active':''}" onclick="cfgTabs='imap';rConfig()">📧 IMAP (Entrada)</button>
+      <button class="fb${cfgTabs==='smtp'?' active':''}" onclick="cfgTabs='smtp';rConfig()">📤 SMTP (Salida)</button>
+      <button class="fb${cfgTabs==='horas'?' active':''}" onclick="cfgTabs='horas';rConfig()">⏱️ Tiempos</button>
+    </div>
+    
+    <div id="cfg-content">Cargando...</div>
+  `;
+  renderCfgTab(cfg);
+}
+
+function renderCfgTab(cfg){
+  const c=$('cfg-content');
+  if(!c)return;
+  
+  if(cfgTabs==='imap'){
+    c.innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <div><div style="font-family:var(--font-head);font-size:16px;font-weight:700">Conexión IMAP</div><div style="font-size:13px;color:var(--muted);margin-top:4px">Configuración para recibir facturas por correo electrónico</div></div>
+          <span class="badge ${cfg.imap_host?.valor?'b-aprobada':'b-revision'}">${cfg.imap_host?.valor?'Configurado':'Sin configurar'}</span>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>HOST IMAP</label><input type="text" id="cfg-imap-host" value="${esc(cfg.imap_host?.valor||'')}" placeholder="mail.dominio.com"/></div>
+          <div class="field"><label>PUERTO</label><input type="number" id="cfg-imap-port" value="${esc(cfg.imap_port?.valor||'993')}" placeholder="993"/></div>
+          <div class="field"><label>USUARIO (EMAIL)</label><input type="email" id="cfg-imap-user" value="${esc(cfg.imap_user?.valor||'')}" placeholder="facturas@dominio.com"/></div>
+          <div class="field"><label>CONTRASEÑA</label><input type="password" id="cfg-imap-pass" value="${esc(cfg.imap_password?.valor||'')}" placeholder="••••••••"/></div>
+          <div class="field"><label>CARPETA</label><input type="text" id="cfg-imap-folder" value="${esc(cfg.imap_folder?.valor||'INBOX')}" placeholder="INBOX"/></div>
+          <div class="field"><label>USAR TLS/SSL</label>
+            <select id="cfg-imap-tls">
+              <option value="true" ${cfg.imap_tls?.valor!=='false'?'selected':''}>Sí (puerto 993)</option>
+              <option value="false" ${cfg.imap_tls?.valor==='false'?'selected':''}>No (puerto 143)</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px">
+          <button class="btn btn-primary" onclick="guardarCfg('imap')">💾 Guardar</button>
+          <button class="btn btn-secondary" onclick="testImap()">🧪 Probar conexión</button>
+        </div>
+        <div id="cfg-test-imap" style="margin-top:12px"></div>
+      </div>
+      
+      <div style="background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.2);border-radius:12px;padding:16px">
+        <div style="font-size:13px;color:var(--accent);font-weight:600;margin-bottom:8px">ℹ️ Nota sobre configuración IMAP</div>
+        <div style="font-size:13px;color:var(--muted)">Esta configuración se usa para sincronizar automáticamente las facturas electrónicas recibidas por correo. El sistema buscará adjuntos PDF y XML en los mensajes no leídos de la carpeta configurada.</div>
+      </div>
+    `;
+  }
+  else if(cfgTabs==='smtp'){
+    c.innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <div><div style="font-family:var(--font-head);font-size:16px;font-weight:700">Servidor SMTP</div><div style="font-size:13px;color:var(--muted);margin-top:4px">Configuración para enviar notificaciones por correo</div></div>
+          <span class="badge ${cfg.smtp_host?.valor?'b-aprobada':'b-revision'}">${cfg.smtp_host?.valor?'Configurado':'Sin configurar'}</span>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>HOST SMTP</label><input type="text" id="cfg-smtp-host" value="${esc(cfg.smtp_host?.valor||'')}" placeholder="smtp.dominio.com"/></div>
+          <div class="field"><label>PUERTO</label><input type="number" id="cfg-smtp-port" value="${esc(cfg.smtp_port?.valor||'587')}" placeholder="587"/></div>
+          <div class="field"><label>USUARIO</label><input type="text" id="cfg-smtp-user" value="${esc(cfg.smtp_user?.valor||'')}" placeholder="notificaciones@dominio.com"/></div>
+          <div class="field"><label>CONTRASEÑA</label><input type="password" id="cfg-smtp-pass" value="${esc(cfg.smtp_password?.valor||'')}" placeholder="••••••••"/></div>
+          <div class="field full"><label>REMITENTE (FROM)</label><input type="text" id="cfg-smtp-from" value="${esc(cfg.smtp_from?.valor||'')}" placeholder="Vitamar Docs <notificaciones@dominio.com>"/></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px">
+          <button class="btn btn-primary" onclick="guardarCfg('smtp')">💾 Guardar</button>
+          <button class="btn btn-secondary" onclick="testSmtp()">🧪 Probar conexión</button>
+        </div>
+        <div id="cfg-test-smtp" style="margin-top:12px"></div>
+      </div>
+      
+      <div style="background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.2);border-radius:12px;padding:16px">
+        <div style="font-size:13px;color:var(--accent);font-weight:600;margin-bottom:8px">ℹ️ Nota sobre SMTP</div>
+        <div style="font-size:13px;color:var(--muted)">El servidor SMTP se usa para enviar notificaciones a los usuarios cuando hay facturas que requieren atención. Configure un servidor SMTP válido para activar las notificaciones.</div>
+      </div>
+    `;
+  }
+  else if(cfgTabs==='horas'){
+    c.innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
+        <div style="font-family:var(--font-head);font-size:16px;font-weight:700;margin-bottom:20px">Tiempos y escalaciones</div>
+        <div class="form-grid">
+          <div class="field"><label>HORAS PARA REVISIÓN</label><input type="number" id="cfg-horas-revision" value="${esc(cfg.horas_limite_revision?.valor||'24')}" placeholder="24"/><div style="font-size:11px;color:var(--muted);margin-top:4px">Horas antes de escalar al jefe de área</div></div>
+          <div class="field"><label>HORAS ESCALACIÓN NIVEL 2</label><input type="number" id="cfg-horas-nivel2" value="${esc(cfg.horas_escalacion_nivel2?.valor||'48')}" placeholder="48"/><div style="font-size:11px;color:var(--muted);margin-top:4px">Horas antes de escalar a gerencia</div></div>
+          <div class="field"><label>HORAS DIAN TÁCITA</label><input type="number" id="cfg-horas-dian" value="${esc(cfg.horas_dian_tacita?.valor||'48')}" placeholder="48"/><div style="font-size:11px;color:var(--muted);margin-top:4px">Horas para aceptación tácita DIAN</div></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px">
+          <button class="btn btn-primary" onclick="guardarCfg('horas')">💾 Guardar</button>
+        </div>
+      </div>
+    `;
+  }
+}
+
+async function guardarCfg(tab){
+  const data={};
+  if(tab==='imap'){
+    data.imap_host=$('cfg-imap-host')?.value?.trim()||'';
+    data.imap_port=$('cfg-imap-port')?.value?.trim()||'993';
+    data.imap_user=$('cfg-imap-user')?.value?.trim()||'';
+    data.imap_password=$('cfg-imap-pass')?.value||'';
+    data.imap_folder=$('cfg-imap-folder')?.value?.trim()||'INBOX';
+    data.imap_tls=$('cfg-imap-tls')?.value||'true';
+  }else if(tab==='smtp'){
+    data.smtp_host=$('cfg-smtp-host')?.value?.trim()||'';
+    data.smtp_port=$('cfg-smtp-port')?.value?.trim()||'587';
+    data.smtp_user=$('cfg-smtp-user')?.value?.trim()||'';
+    data.smtp_password=$('cfg-smtp-pass')?.value||'';
+    data.smtp_from=$('cfg-smtp-from')?.value?.trim()||'';
+  }else if(tab==='horas'){
+    data.horas_limite_revision=$('cfg-horas-revision')?.value?.trim()||'24';
+    data.horas_escalacion_nivel2=$('cfg-horas-nivel2')?.value?.trim()||'48';
+    data.horas_dian_tacita=$('cfg-horas-dian')?.value?.trim()||'48';
+  }
+  try{
+    await api('PUT','/configuracion',data);
+    toast('Configuración guardada','success');
+    if(tab==='horas'){rConfig()}
+  }catch(e){toast(e.message,'error')}
+}
+
+async function testImap(){
+  const host=$('cfg-imap-host')?.value?.trim();
+  const port=$('cfg-imap-port')?.value?.trim();
+  const user=$('cfg-imap-user')?.value?.trim();
+  const pass=$('cfg-imap-pass')?.value;
+  const tls=$('cfg-imap-tls')?.value;
+  const el=$('cfg-test-imap');
+  if(!host||!user||!pass){el.innerHTML='<span style="color:var(--danger)">Completa host, usuario y contraseña</span>';return}
+  el.innerHTML='<span style="color:var(--muted)">Probando conexión...</span>';
+  try{
+    const r=await api('GET',`/configuracion/imap/test?host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}&user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}&secure=${tls}`);
+    el.innerHTML='<span style="color:var(--success)">✓ Conexión exitosa</span>';
+  }catch(e){
+    el.innerHTML=`<span style="color:var(--danger)">✗ Error: ${esc(e.message)}</span>`;
+  }
+}
+
+async function testSmtp(){
+  const host=$('cfg-smtp-host')?.value?.trim();
+  const port=$('cfg-smtp-port')?.value?.trim();
+  const user=$('cfg-smtp-user')?.value?.trim();
+  const pass=$('cfg-smtp-pass')?.value;
+  const from=$('cfg-smtp-from')?.value?.trim();
+  const el=$('cfg-test-smtp');
+  if(!host||!user||!pass){el.innerHTML='<span style="color:var(--danger)">Completa host, usuario y contraseña</span>';return}
+  el.innerHTML='<span style="color:var(--muted)">Probando conexión...</span>';
+  try{
+    const r=await api('GET',`/configuracion/smtp/test?host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}&user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}&from=${encodeURIComponent(from)}`);
+    el.innerHTML='<span style="color:var(--success)">✓ Configuración SMTP correcta</span>';
+  }catch(e){
+    el.innerHTML=`<span style="color:var(--danger)">✗ Error: ${esc(e.message)}</span>`;
+  }
+}
+
+// ─── AUDITORÍA ─────────────────────────────────────────────────────────────
+let auditTab='accesos';
+async function rAudit(){
+  const [stats, usuarios] = await Promise.all([
+    api('GET','/audit/estadisticas'),
+    api('GET','/usuarios')
+  ]);
+  $('content').innerHTML=`
+    <div class="page-header"><div><div class="page-title">Auditoría</div><div class="page-sub">Registro de actividad y seguridad</div></div></div>
+    
+    <div class="stats-row" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat-card">
+        <div class="stat-label">Accesos hoy</div>
+        <div class="stat-value blue">${stats.accesos_hoy||0}</div>
+        <div class="stat-s">${stats.accesos_7d||0} últimos 7 días</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Eventos flujo (30d)</div>
+        <div class="stat-value green">${stats.eventos_30d||0}</div>
+        <div class="stat-s">${stats.usuarios_activos_7d||0} usuarios activos</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Intentos fallidos (7d)</div>
+        <div class="stat-value" style="color:var(--danger)">${stats.logins_fallidos_7d||0}</div>
+        ${stats.top_ip_bloqueadas?.length?'<div class="stat-s">IPs con más errores</div>':''}
+      </div>
+    </div>
+    
+    ${stats.top_ip_bloqueadas?.length?`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px">IPs con más intentos fallidos (7 días)</div>
+      <table style="width:100%"><thead><tr><th style="text-align:left;font-size:11px;color:var(--muted)">IP</th><th style="text-align:left;font-size:11px;color:var(--muted)">Intentos</th><th style="text-align:left;font-size:11px;color:var(--muted)">Último intento</th></tr></thead>
+      <tbody>
+        ${stats.top_ip_bloqueadas.map(ip=>`<tr><td style="padding:8px 0;font-family:monospace;font-size:12px">${esc(ip.ip)}</td><td style="color:var(--danger);font-weight:600">${ip.intentos}</td><td style="color:var(--muted);font-size:12px">${fdate(ip.ultimo_intento)}</td></tr>`).join('')}
+      </tbody></table>
+    </div>`:''}
+    
+    <div style="display:flex;gap:6px;margin-bottom:20px">
+      <button class="fb${auditTab==='accesos'?' active':''}" onclick="auditTab='accesos';rAudit()">🔐 Accesos</button>
+      <button class="fb${auditTab==='eventos'?' active':''}" onclick="auditTab='eventos';rAudit()">📋 Eventos flujo</button>
+    </div>
+    
+    <div class="tbl">
+      <div class="tbl-head"><div class="tbl-title" id="audit-title">Cargando...</div></div>
+      <table><thead id="audit-head"></thead>
+      <tbody id="audit-body"><tr><td colspan="10" class="empty">Cargando...</td></tr></tbody>
+    </div>
+  `;
+  await cargarAudit(usuarios);
+}
+
+async function cargarAudit(usuarios){
+  if(auditTab==='accesos'){
+    const r=await api('GET','/audit/accesos?limit=100');
+    $('audit-title').textContent=`${r.total||0} registros de acceso`;
+    $('audit-head').innerHTML=`<tr><th>Fecha</th><th>Usuario</th><th>IP</th><th>Resultado</th><th>Motivo</th></tr>`;
+    $('audit-body').innerHTML=r.data?.length?r.data.map(l=>`<tr>
+      <td style="color:var(--muted);font-size:12px">${fdate(l.creado_en)}</td>
+      <td style="font-weight:500">${esc(l.usuario_nombre||l.email||'—')}</td>
+      <td style="font-family:monospace;font-size:12px">${esc(l.ip||'—')}</td>
+      <td><span class="badge ${l.exito?'b-aprobada':'b-rechazada'}">${l.exito?'Éxito':'Fallido'}</span></td>
+      <td style="color:var(--muted);font-size:12px">${esc(l.motivo||'—')}</td>
+    </tr>`).join(''):'<tr><td colspan="5" class="empty">Sin registros</td></tr>';
+  }else{
+    const r=await api('GET','/audit/eventos?limit=100');
+    $('audit-title').textContent=`${r.total||0} eventos de flujo`;
+    $('audit-head').innerHTML=`<tr><th>Fecha</th><th>Usuario</th><th>Tipo</th><th>Factura</th><th>Comentario</th></tr>`;
+    $('audit-body').innerHTML=r.data?.length?r.data.map(e=>`<tr>
+      <td style="color:var(--muted);font-size:12px">${fdate(e.creado_en)}</td>
+      <td style="font-weight:500">${esc(e.usuario_nombre||'Sistema')}</td>
+      <td><span class="tag">${esc(e.tipo)}</span></td>
+      <td class="mono" style="font-size:12px">${esc(e.numero_factura||'—')}</td>
+      <td style="color:var(--muted);font-size:12px">${esc(e.comentario||'—')}</td>
+    </tr>`).join(''):'<tr><td colspan="5" class="empty">Sin eventos</td></tr>';
+  }
+}
+
+// ─── CENTROS DE OPERACIÓN ─────────────────────────────────────────────────
+async function rCentros(){
+  const centros=await api('GET','/centros');
+  $('content').innerHTML=`
+    <div class="page-header"><div><div class="page-title">Centros de Operación</div><div class="page-sub">Territorios y sedes de la compañía</div></div><button class="btn btn-primary" onclick="mCentro()">+ Nuevo centro</button></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px" id="centros-grid">
+      ${centros.length?centros.map(c=>`<div class="tbl" style="padding:20px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+          <div style="font-weight:700;font-size:16px">${esc(c.nombre)}</div>
+          <span class="badge ${c.activo?'b-aprobada':'b-rechazada'}">${c.activo?'Activo':'Inactivo'}</span>
+        </div>
+        ${c.codigo?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">📍 ${esc(c.codigo)}</div>`:''}
+        ${c.direccion?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">🏠 ${esc(c.direccion)}</div>`:''}
+        ${c.telefono?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">📞 ${esc(c.telefono)}</div>`:''}
+        ${c.email?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">✉️ ${esc(c.email)}</div>`:''}
+        ${c.descripcion?`<div style="font-size:12px;color:var(--text);margin-top:8px;border-top:1px solid var(--border);padding-top:8px">${esc(c.descripcion)}</div>`:''}
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="mCentro('${c.id}')">✏️ Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="delCentro('${c.id}','${esc(c.nombre)}')">🗑️</button>
+        </div>
+      </div>`).join(''):'<div class="empty" style="grid-column:1/-1">No hay centros registrados</div>'}
+    </div>
+  `;
+}
+
+async function mCentro(id){
+  let centro=null;
+  if(id)centro=await api('GET',`/centros/${id}`);
+  const esNuevo=!id;
+  window.saveCentro=async()=>{
+    const n=$('cn-nombre')?.value?.trim();
+    if(!n){toast('El nombre es requerido','error');return}
+    const data={
+      nombre:n,
+      codigo:$('cn-codigo')?.value?.trim()||null,
+      descripcion:$('cn-desc')?.value?.trim()||null,
+      direccion:$('cn-dir')?.value?.trim()||null,
+      telefono:$('cn-tel')?.value?.trim()||null,
+      email:$('cn-email')?.value?.trim()||null,
+      activo:$('cn-activo')?.checked??true
+    };
+    try{
+      if(esNuevo)await api('POST','/centros',data);
+      else await api('PUT',`/centros/${id}`,data);
+      closeM();
+      toast('Centro guardado','success');
+      rCentros();
+    }catch(e){toast(e.message,'error')}
+  };
+  showM(esNuevo?'Nuevo centro':'Editar centro',`
+    <div class="field"><label>NOMBRE *</label><input id="cn-nombre" value="${esc(centro?.nombre||'')}" placeholder="Ej: Bogotá Centro"/></div>
+    <div class="form-grid">
+      <div class="field"><label>CÓDIGO</label><input id="cn-codigo" value="${esc(centro?.codigo||'')}" placeholder="Ej: BOG-01"/></div>
+      <div class="field"><label>EMAIL</label><input id="cn-email" type="email" value="${esc(centro?.email||'')}" placeholder="sede@vitamar.com"/></div>
+    </div>
+    <div class="field"><label>DIRECCIÓN</label><input id="cn-dir" value="${esc(centro?.direccion||'')}" placeholder="Dirección completa"/></div>
+    <div class="form-grid">
+      <div class="field"><label>TELÉFONO</label><input id="cn-tel" value="${esc(centro?.telefono||'')}" placeholder="+57 1 234 5678"/></div>
+      <div class="field"><label>ESTADO</label><label style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="cn-activo" ${centro?.activo!==false?'checked':''}/> Activo</label></div>
+    </div>
+    <div class="field"><label>DESCRIPCIÓN</label><textarea id="cn-desc" rows="2" placeholder="Descripción u observaciones...">${esc(centro?.descripcion||'')}</textarea></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM()">Cancelar</button><button class="btn btn-primary" onclick="saveCentro()">Guardar</button></div>
+  `,500);
+}
+
+async function delCentro(id,nombre){
+  if(!confirm(`¿Eliminar el centro "${nombre}"?`))return;
+  try{await api('DELETE',`/centros/${id}`);toast('Centro eliminado','success');rCentros()}catch(e){toast(e.message,'error')}
+}
 
 // ─── INIT ───────────────────────────────────────────────────────────────────
 if(S.token&&S.usuario){showApp()}else{$('app-screen').classList.remove('show');$('login-screen').style.display='flex'}

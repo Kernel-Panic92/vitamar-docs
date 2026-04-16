@@ -26,8 +26,11 @@ app.use('/api/facturas',    require('./routes/facturas'));
 app.use('/api/usuarios',    require('./routes/usuarios'));
 app.use('/api/proveedores', require('./routes/proveedores'));
 app.use('/api/dashboard',   require('./routes/dashboard'));
-app.use('/api/backup',      require('./routes/backup'));
-app.use('/api/sync',        require('./routes/sync'));
+app.use('/api/backup',         require('./routes/backup'));
+app.use('/api/sync',           require('./routes/sync'));
+app.use('/api/configuracion',  require('./routes/configuracion'));
+app.use('/api/audit',          require('./routes/audit'));
+app.use('/api/centros',        require('./routes/centros'));
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

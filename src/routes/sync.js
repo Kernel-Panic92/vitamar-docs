@@ -3,7 +3,6 @@ const { authMiddleware, requireRol } = require('../middleware/auth');
 const syncState = require('../services/sync-state');
 
 router.use(authMiddleware);
-
 syncState.cargarEstado();
 
 router.get('/status', async (req, res) => {
@@ -34,14 +33,16 @@ router.get('/status', async (req, res) => {
   });
 });
 
-router.post('/sync', requireRol('admin', 'contador'), async (req, res) => {
+router.post('/', requireRol('admin', 'contador'), (req, res) => {
   if (syncState.obtenerEstado().sincronizando) {
     return res.status(409).json({ error: 'Ya hay una sincronización en progreso' });
   }
   
   try {
-    const { pollCorreo } = require('../services/imap.service');
-    pollCorreo();
+    const imapService = require('../services/imap.service');
+    if (imapService.pollCorreo) {
+      imapService.pollCorreo(req.body.rescanAll || false);
+    }
     res.json({ ok: true, mensaje: 'Sincronización iniciada' });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -169,4 +169,74 @@ router.delete('/:id', requireRol('admin'), async (req, res) => {
   }
 });
 
+// ─── GET /api/categorias/todas (incluye inactivas) ────────────────────────
+router.get('/todas', requireRol('admin'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT c.*,
+         COALESCE(
+           json_agg(
+             json_build_object('id', a.id, 'nombre', a.nombre)
+           ) FILTER (WHERE a.id IS NOT NULL),
+           '[]'
+         ) AS areas
+       FROM categorias_compra c
+       LEFT JOIN categoria_area ca ON ca.categoria_id = c.id
+       LEFT JOIN areas a ON a.id = ca.area_id
+       GROUP BY c.id
+       ORDER BY c.nombre`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/categorias/usuario/:usuarioId ───────────────────────────────
+router.get('/usuario/:usuarioId', requireRol('admin'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT categoria_id FROM categorias_usuario WHERE usuario_id = $1`,
+      [req.params.usuarioId]
+    );
+    res.json(rows.map(r => r.categoria_id));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PUT /api/categorias/usuario/:usuarioId ───────────────────────────────
+router.put('/usuario/:usuarioId', requireRol('admin'), async (req, res) => {
+  const { categoria_ids } = req.body;
+  
+  if (!Array.isArray(categoria_ids)) {
+    return res.status(400).json({ error: 'categoria_ids debe ser un array' });
+  }
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    
+    await client.query(
+      'DELETE FROM categorias_usuario WHERE usuario_id = $1',
+      [req.params.usuarioId]
+    );
+
+    for (const catId of categoria_ids) {
+      await client.query(
+        'INSERT INTO categorias_usuario (usuario_id, categoria_id) VALUES ($1, $2)',
+        [req.params.usuarioId, catId]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;

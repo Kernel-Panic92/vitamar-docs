@@ -8,6 +8,27 @@ const AdmZip  = require('adm-zip');
 const db      = require('../db');
 const syncState = require('./sync-state');
 
+let cachedConfig = null;
+
+async function getConfig() {
+  if (cachedConfig) return cachedConfig;
+  try {
+    const { rows } = await db.query('SELECT clave, valor FROM configuracion');
+    cachedConfig = {};
+    for (const row of rows) {
+      cachedConfig[row.clave] = row.valor;
+    }
+    return cachedConfig;
+  } catch (e) {
+    console.error('[IMAP] Error cargando config:', e.message);
+    return {};
+  }
+}
+
+function clearConfigCache() {
+  cachedConfig = null;
+}
+
 function extraerInvoiceEmbebido(xml) {
   const invoiceMatch = xml.match(/<cbc:Description><!\[CDATA\[([\s\S]*?)\]\]><\/cbc:Description>/);
   if (invoiceMatch) {
@@ -30,7 +51,8 @@ function parsearXml(xmlContent) {
     nitReceptor: null,
     valorBruto: 0,
     iva: 0,
-    valorTotal: 0
+    valorTotal: 0,
+    ordenCompra: null
   };
 
   try {
@@ -53,6 +75,28 @@ function parsearXml(xmlContent) {
 
     const fechaMatch = xmlFinal.match(/<cbc:IssueDate>(\d{4}-\d{2}-\d{2})<\/cbc:IssueDate>/);
     if (fechaMatch) data.fecha = fechaMatch[1];
+
+    // Extraer orden de compra / contract reference
+    const orderRefMatch = xmlFinal.match(/<cac:OrderReference>([\s\S]*?)<\/cac:OrderReference>/);
+    if (orderRefMatch) {
+      const orderIdMatch = orderRefMatch[1].match(/<cbc:ID>([^<]+)<\/cbc:ID>/);
+      if (orderIdMatch) {
+        data.ordenCompra = orderIdMatch[1].trim();
+        console.log(`  [Parser] Orden de compra: ${data.ordenCompra}`);
+      }
+    }
+
+    // También buscar ContractDocumentReference
+    if (!data.ordenCompra) {
+      const contractMatch = xmlFinal.match(/<cac:ContractDocumentReference>([\s\S]*?)<\/cac:ContractDocumentReference>/);
+      if (contractMatch) {
+        const contractIdMatch = contractMatch[1].match(/<cbc:ID>([^<]+)<\/cbc:ID>/);
+        if (contractIdMatch) {
+          data.ordenCompra = contractIdMatch[1].trim();
+          console.log(`  [Parser] Referencia contractual: ${data.ordenCompra}`);
+        }
+      }
+    }
 
     const cufeMatch = xmlFinal.match(/<cbc:UUID[^>]*schemeName="CUFE-SHA384"[^>]*>([^<]+)<\/cbc:UUID>/);
     if (!cufeMatch) {
@@ -233,12 +277,12 @@ async function procesarCorreo(parsed, msgId) {
     return 'omitido';
   }
 
-  const { numeroFactura, nitEmisor, nombreEmisor, valorTotal, iva, valorBruto, fecha, cufe } = datosFactura;
+  const { numeroFactura, nitEmisor, nombreEmisor, valorTotal, iva, valorBruto, fecha, cufe, ordenCompra } = datosFactura;
   const fechaFactura = fecha ? new Date(fecha.replace(/(\d{4})-(\d{2})-(\d{2})/, '$1-$2-$3')) : null;
   const emailOrigen = parsed.from?.value?.[0]?.address || null;
   const asunto = parsed.subject || '';
   
-  console.log(`  [IMAP] Número: ${numeroFactura}, Valor: ${valorTotal}, IVA: ${iva}`);
+  console.log(`  [IMAP] Número: ${numeroFactura}, Valor: ${valorTotal}, IVA: ${iva}${ordenCompra ? ', OC: ' + ordenCompra : ''}`);
 
   if (!numeroFactura) {
     console.log(`  [IMAP] No se pudo extraer número de factura — omitiendo`);
@@ -263,8 +307,8 @@ async function procesarCorreo(parsed, msgId) {
     const proveedorId = await crearProveedorSiNoExiste(client, nitEmisor, nombreEmisor, emailOrigen);
 
     const ahora = new Date();
-    const referencia = fechaFactura || ahora;
-    const limiteDian = new Date(referencia.getTime() + 48 * 60 * 60 * 1000);
+    const referencia = fechaFactura ? fechaFactura.toISOString().split('T')[0] : ahora.toISOString().split('T')[0];
+    const limiteDian = new Date((fechaFactura || ahora).getTime() + 48 * 60 * 60 * 1000);
 
     const { rows } = await client.query(
       `INSERT INTO facturas (
@@ -272,8 +316,9 @@ async function procesarCorreo(parsed, msgId) {
           email_origen, email_asunto,
           limite_dian, estado,
           valor_total, valor_iva, valor,
-          fecha_factura, nit_emisor, nombre_emisor, cufe
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,'recibida',$8,$9,$10,$11,$12,$13,$14)
+          fecha_factura, nit_emisor, nombre_emisor, cufe,
+          orden_compra, referencia
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,'recibida',$8,$9,$10,$11,$12,$13,$14,$15,$16)
         RETURNING id, numero_factura`,
       [
         numeroFactura,
@@ -290,7 +335,9 @@ async function procesarCorreo(parsed, msgId) {
         nitEmisor,
         nombreEmisor,
         cufe,
-      ]
+        ordenCompra || null,
+        referencia
+       ]
     );
 
     await client.query(
@@ -316,25 +363,27 @@ async function procesarCorreo(parsed, msgId) {
   }
 }
 
-async function pollCorreo() {
-  if (!process.env.IMAP_HOST || !process.env.IMAP_USER) {
-    console.log('[IMAP] Configuración IMAP no definida — servicio desactivado');
+async function pollCorreo(rescanAll = false) {
+  const config = await getConfig();
+  
+  if (!config.imap_host || !config.imap_user) {
+    console.log('[IMAP] Configuración IMAP no definida en BD — servicio desactivado');
     return;
   }
 
   const client = new ImapFlow({
-    host:   process.env.IMAP_HOST,
-    port:   parseInt(process.env.IMAP_PORT || '993'),
-    secure: process.env.IMAP_TLS !== 'false',
+    host:   config.imap_host,
+    port:   parseInt(config.imap_port || '993'),
+    secure: config.imap_tls !== 'false',
     auth: {
-      user: process.env.IMAP_USER,
-      pass: process.env.IMAP_PASSWORD,
+      user: config.imap_user,
+      pass: config.imap_password,
     },
     logger: {
-      debug: () => {},
-      info:  () => {},
-      warn:  () => {},
-      error: () => {},
+      debug: (msg) => console.log('[IMAP DEBUG]', msg),
+      info:  (msg) => console.log('[IMAP INFO]', msg),
+      warn:  (msg) => console.warn('[IMAP WARN]', msg),
+      error: (msg) => console.error('[IMAP ERROR]', msg),
     },
   });
 
@@ -347,14 +396,21 @@ async function pollCorreo() {
   try {
     await client.connect();
     console.log('[IMAP] ✓ Conexión exitosa');
-    const lock = await client.getMailboxLock(process.env.IMAP_FOLDER || 'INBOX');
+    const lock = await client.getMailboxLock(config.imap_folder || 'INBOX');
 
     try {
-      let mensajes = await client.search({ seen: false });
-      console.log(`[IMAP] ${mensajes.length} mensaje(s) no leídos encontrados`);
+      let mensajes;
+      if (rescanAll) {
+        mensajes = await client.search({ all: true });
+        mensajes = mensajes.slice(-500);
+        console.log(`[IMAP] Rescan: ${mensajes.length} mensajes (últimos 500)`);
+      } else {
+        mensajes = await client.search({ seen: false });
+        console.log(`[IMAP] ${mensajes.length} mensaje(s) no leídos encontrados`);
+      }
       
       if (mensajes.length === 0) {
-        console.log('[IMAP] Sin mensajes nuevos');
+        console.log('[IMAP] Sin mensajes para procesar');
         syncState.terminarSync(0, 0, 0);
         return;
       }
@@ -367,7 +423,9 @@ async function pollCorreo() {
 
         for await (const msg of client.fetch(lote, { source: true, flags: true })) {
           try {
-            if (msg.flags?.includes('\\Seen')) {
+            const flags = msg.flags || [];
+            const seen = Array.isArray(flags) && flags.includes('\\Seen');
+            if (seen) {
               totalDuplicados++;
               totalProcesados++;
               continue;
@@ -402,7 +460,7 @@ async function pollCorreo() {
       }
 
       syncState.terminarSync(totalCreados, totalDuplicados, totalError);
-      console.log(`[IMAP] ✓ Resumen: ${totalCreados} creadas, ${totalDuplicadas} duplicadas, ${totalError} errores`);
+      console.log(`[IMAP] ✓ Resumen: ${totalCreados} creadas, ${totalDuplicados} duplicadas, ${totalError} errores`);
 
     } finally {
       lock.release();
@@ -411,8 +469,9 @@ async function pollCorreo() {
     await client.logout();
   } catch (err) {
     console.error('[IMAP] Error de conexión:', err.message);
+    console.error('[IMAP] Stack:', err.stack);
+    console.error('[IMAP] Objeto completo:', JSON.stringify(err, null, 2));
     syncState.terminarSync(0, 0, 0);
-    console.error('[IMAP] Detalle:', err.code, err.command);
   }
 }
 
@@ -423,4 +482,4 @@ function iniciarServicioImap() {
   setInterval(pollCorreo, minutos * 60 * 1000);
 }
 
-module.exports = { iniciarServicioImap, pollCorreo };
+module.exports = { iniciarServicioImap, pollCorreo, clearConfigCache };
