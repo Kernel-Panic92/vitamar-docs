@@ -52,7 +52,8 @@ function parsearXml(xmlContent) {
     valorBruto: 0,
     iva: 0,
     valorTotal: 0,
-    ordenCompra: null
+    ordenCompra: null,
+    limitePago: null
   };
 
   try {
@@ -169,6 +170,23 @@ function parsearXml(xmlContent) {
       data.iva = data.valorTotal - data.valorBruto;
     }
 
+    // Extraer fecha de vencimiento (DueDate)
+    const dueDateMatch = xmlFinal.match(/<cbc:DueDate>(\d{4}-\d{2}-\d{2})<\/cbc:DueDate>/);
+    if (dueDateMatch) {
+      data.limitePago = dueDateMatch[1];
+      console.log(`  [Parser] Fecha vencimiento: ${data.limitePago}`);
+    } else {
+      // Buscar en PaymentTerms
+      const paymentTermsMatch = xmlFinal.match(/<cac:PaymentTerms>([\s\S]*?)<\/cac:PaymentTerms>/);
+      if (paymentTermsMatch) {
+        const dueDateInTerms = paymentTermsMatch[1].match(/<cbc:PaymentDueDate>(\d{4}-\d{2}-\d{2})<\/cbc:PaymentDueDate>/);
+        if (dueDateInTerms) {
+          data.limitePago = dueDateInTerms[1];
+          console.log(`  [Parser] Fecha vencimiento (PaymentTerms): ${data.limitePago}`);
+        }
+      }
+    }
+
   } catch (err) {
     console.log(`  [Parser] Error: ${err.message}`);
   }
@@ -277,12 +295,12 @@ async function procesarCorreo(parsed, msgId) {
     return 'omitido';
   }
 
-  const { numeroFactura, nitEmisor, nombreEmisor, valorTotal, iva, valorBruto, fecha, cufe, ordenCompra } = datosFactura;
+  const { numeroFactura, nitEmisor, nombreEmisor, valorTotal, iva, valorBruto, fecha, cufe, ordenCompra, limitePago } = datosFactura;
   const fechaFactura = fecha ? new Date(fecha.replace(/(\d{4})-(\d{2})-(\d{2})/, '$1-$2-$3')) : null;
   const emailOrigen = parsed.from?.value?.[0]?.address || null;
   const asunto = parsed.subject || '';
   
-  console.log(`  [IMAP] Número: ${numeroFactura}, Valor: ${valorTotal}, IVA: ${iva}${ordenCompra ? ', OC: ' + ordenCompra : ''}`);
+  console.log(`  [IMAP] Número: ${numeroFactura}, Valor: ${valorTotal}, IVA: ${iva}${ordenCompra ? ', OC: ' + ordenCompra : ''}${limitePago ? ', Vence: ' + limitePago : ''}`);
 
   if (!numeroFactura) {
     console.log(`  [IMAP] No se pudo extraer número de factura — omitiendo`);
@@ -314,11 +332,11 @@ async function procesarCorreo(parsed, msgId) {
       `INSERT INTO facturas (
           numero_factura, proveedor_id, archivo_pdf, archivo_xml,
           email_origen, email_asunto,
-          limite_dian, estado,
+          limite_dian, limite_pago, estado,
           valor_total, valor_iva, valor,
           fecha_factura, nit_emisor, nombre_emisor, cufe,
           orden_compra, referencia
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,'recibida',$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'recibida',$9,$10,$11,$12,$13,$14,$15,$16,$17)
         RETURNING id, numero_factura`,
       [
         numeroFactura,
@@ -328,6 +346,7 @@ async function procesarCorreo(parsed, msgId) {
         emailOrigen,
         asunto.substring(0, 499),
         limiteDian,
+        limitePago || null,
         valorTotal,
         iva,
         valorBruto,

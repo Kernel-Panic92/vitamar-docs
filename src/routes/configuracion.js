@@ -199,4 +199,162 @@ router.put('/horas', requireRol('admin', 'contador'), async (req, res) => {
   }
 });
 
+// ─── UPDATER ────────────────────────────────────────────────────────────────
+const { execSync, exec } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+
+const APP_DIR = process.cwd();
+const UPDATER_LOG = path.join(APP_DIR, 'logs', 'updater.log');
+
+function logUpdater(msg) {
+  const timestamp = new Date().toISOString();
+  const logLine = `[${timestamp}] ${msg}`;
+  try {
+    const logsDir = path.dirname(UPDATER_LOG);
+    if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
+    fs.appendFileSync(UPDATER_LOG, logLine + '\n');
+  } catch (e) {}
+  console.log(`[Updater] ${msg}`);
+}
+
+function getUpdaterLog() {
+  try {
+    if (fs.existsSync(UPDATER_LOG)) {
+      const content = fs.readFileSync(UPDATER_LOG, 'utf8');
+      const lines = content.split('\n').filter(l => l.trim()).slice(-100);
+      return lines.join('\n');
+    }
+  } catch (e) {}
+  return '';
+}
+
+function asyncExec(cmd) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { cwd: APP_DIR, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) reject(new Error(stderr || err.message));
+      else resolve(stdout);
+    });
+  });
+}
+
+router.get('/updater/status', requireRol('admin'), async (req, res) => {
+  try {
+    const gitBranch = execSync('git branch --show-current 2>/dev/null || echo "-"', { cwd: APP_DIR }).toString().trim();
+    const gitCommit = execSync('git rev-parse --short HEAD 2>/dev/null || echo "-"', { cwd: APP_DIR }).toString().trim();
+    const gitRemote = execSync('git remote get-url origin 2>/dev/null || echo "-"', { cwd: APP_DIR }).toString().trim();
+    
+    const lastUpdate = fs.existsSync(path.join(APP_DIR, '.last-update'))
+      ? fs.readFileSync(path.join(APP_DIR, '.last-update'), 'utf8').trim()
+      : null;
+    
+    res.json({
+      ok: true,
+      branch: gitBranch,
+      commit: gitCommit,
+      remote: gitRemote,
+      lastUpdate,
+      updaterLog: getUpdaterLog()
+    });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/updater/check', requireRol('admin'), async (req, res) => {
+  try {
+    logUpdater('Verificando actualizaciones...');
+    execSync('git fetch origin', { cwd: APP_DIR, stdio: 'pipe' });
+    
+    const currentCommit = execSync('git rev-parse --short HEAD', { cwd: APP_DIR }).toString().trim();
+    
+    let behind = 0;
+    try {
+      behind = parseInt(execSync('git rev-list HEAD..origin/main --count 2>/dev/null || git rev-list HEAD..origin/master --count 2>/dev/null || echo 0', { cwd: APP_DIR }).toString().trim());
+    } catch (e) { behind = 0; }
+    
+    let changes = [];
+    if (behind > 0) {
+      try {
+        const diff = execSync('git log HEAD..origin/main --oneline 2>/dev/null || git log HEAD..origin/master --oneline 2>/dev/null', { cwd: APP_DIR }).toString().trim();
+        changes = diff.split('\n').filter(l => l.trim()).slice(0, 10);
+      } catch (e) {}
+    }
+    
+    logUpdater(`Verificación completada: ${behind} actualización(es) disponible(s)`);
+    
+    res.json({
+      ok: true,
+      hasUpdates: behind > 0,
+      commitsBehind: behind,
+      currentCommit,
+      changes
+    });
+  } catch (err) {
+    logUpdater(`Error verificando: ${err.message}`);
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/updater/update', requireRol('admin'), async (req, res) => {
+  try {
+    logUpdater('========================================');
+    logUpdater('INICIANDO ACTUALIZACION');
+    logUpdater('========================================');
+    
+    logUpdater('1. Guardando cambios locales...');
+    execSync('git add -A && git stash 2>/dev/null || true', { cwd: APP_DIR, stdio: 'pipe' });
+    
+    logUpdater('2. Pulling latest changes...');
+    execSync('git pull origin main 2>/dev/null || git pull origin master 2>/dev/null', { cwd: APP_DIR, stdio: 'pipe' });
+    
+    logUpdater('3. Instalando dependencias...');
+    try {
+      await asyncExec('npm install --production');
+      logUpdater('Dependencias instaladas');
+    } catch (e) {
+      logUpdater(`npm install: ${e.message}`);
+    }
+    
+    logUpdater('4. Ejecutando migraciones...');
+    try {
+      execSync('npm run migrate', { cwd: APP_DIR, stdio: 'pipe' });
+      logUpdater('Migraciones ejecutadas');
+    } catch (e) {
+      logUpdater(`Migraciones: ${e.message}`);
+    }
+    
+    logUpdater('5. Restaurando cambios locales...');
+    execSync('git stash pop 2>/dev/null || true', { cwd: APP_DIR, stdio: 'pipe' });
+    
+    const newCommit = execSync('git rev-parse --short HEAD', { cwd: APP_DIR }).toString().trim();
+    
+    logUpdater('========================================');
+    logUpdater('ACTUALIZACION COMPLETADA - Commit: ' + newCommit);
+    logUpdater('========================================');
+    
+    fs.writeFileSync(path.join(APP_DIR, '.last-update'), new Date().toISOString());
+    
+    res.json({ ok: true, message: 'Actualización completada', newCommit });
+  } catch (err) {
+    logUpdater(`ERROR: ${err.message}`);
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/updater/restart', requireRol('admin'), async (req, res) => {
+  try {
+    logUpdater('Reiniciando servicio...');
+    execSync('pm2 restart vitamar-docs', { cwd: APP_DIR, stdio: 'pipe' });
+    logUpdater('Servicio reiniciado');
+    res.json({ ok: true, message: 'Servicio reiniciado' });
+  } catch (err) {
+    res.json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/updater/logs', requireRol('admin'), (req, res) => {
+  res.json({ log: getUpdaterLog() });
+});
+
 module.exports = router;

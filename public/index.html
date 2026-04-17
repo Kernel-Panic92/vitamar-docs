@@ -363,6 +363,7 @@ const $=id=>document.getElementById(id);
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function fmt(v){return '$'+Math.round(parseFloat(v)||0).toLocaleString('es-CO')}
 function fdate(d){if(!d)return'—';return new Date(d).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})}
+function fdatetime(d){if(!d)return'—';const dt=new Date(d);return dt.toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'})+' '+dt.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}
 function bdg(e){const m=EM[e]||{l:e,c:'#888'};return`<span class="badge b-${e}">${m.l}</span>`}
 function ctag(c,n){if(!n)return'<span style="color:var(--muted)">—</span>';return`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:${c||'#888'};flex-shrink:0"></span>${esc(n)}</span>`}
 
@@ -580,7 +581,7 @@ async function rDash(){
     <div class="tbl">
       <div class="tbl-head"><div class="tbl-title">Actividad reciente</div><button class="btn btn-primary btn-sm" onclick="mNuevaF()">+ Nueva</button></div>
       <table><thead><tr><th># Factura</th><th>Proveedor</th><th>Categoría</th><th>Valor</th><th>Estado</th><th>Recibida</th><th></th></tr></thead>
-      <tbody>${all.slice(0,10).map(f=>`<tr onclick="abrirF('${f.id}')"><td class="mono">${esc(f.numero_factura)}</td><td style="font-weight:500">${esc(f.proveedor_nombre||'—')}</td><td>${ctag(f.categoria_color,f.categoria_nombre)}</td><td style="font-weight:500">${fmt(f.valor_total||f.valor||0)}</td><td>${bdg(f.estado)}</td><td style="color:var(--muted)">${fdate(f.recibida_en)}</td><td>${f.archivo_pdf?`<span onclick="event.stopPropagation();verPdf('${f.id}')" title="Ver PDF" style="color:var(--accent);font-size:16px;cursor:pointer">📄</span>`:''}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">Sin facturas</td></tr>'}</tbody></table>
+      <tbody>${all.slice(0,10).map(f=>`<tr onclick="abrirF('${f.id}')"><td class="mono">${esc(f.numero_factura)}</td><td style="font-weight:500">${esc(f.proveedor_nombre||'—')}</td><td>${ctag(f.categoria_color,f.categoria_nombre)}</td><td style="font-weight:500">${fmt(f.valor_total||f.valor||0)}</td><td>${bdg(f.estado)}</td><td style="color:var(--muted);font-size:12px">${fdatetime(f.recibida_en)}</td><td>${f.archivo_pdf?`<span onclick="event.stopPropagation();verPdf('${f.id}')" title="Ver PDF" style="color:var(--accent);font-size:16px;cursor:pointer">📄</span>`:''}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">Sin facturas</td></tr>'}</tbody></table>
     </div>`;
   refreshBadges();
 }
@@ -724,7 +725,7 @@ async function rFacturas(filtro){
     <div class="tbl">
       <div class="tbl-head"><div class="tbl-title">${all.length} factura(s)</div></div>
       <table><thead><tr><th># Factura</th><th>Centro</th><th>Proveedor</th><th>Valor</th><th>Estado</th><th>Recibida</th><th></th></tr></thead>
-      <tbody>${all.length?all.map(f=>`<tr onclick="abrirF('${f.id}')"><td class="mono" data-label="Factura">${esc(f.numero_factura)}</td><td data-label="Centro" style="font-size:12px;color:var(--muted)">${esc(f.centro_operacion_nombre||'—')}</td><td data-label="Proveedor" style="font-weight:500">${esc(f.proveedor_nombre||f.nombre_emisor||'—')}</td><td data-label="Valor" style="font-weight:500">${fmt(f.valor_total||f.valor||0)}</td><td data-label="Estado">${bdg(f.estado)}</td><td data-label="Fecha" style="color:var(--muted);font-size:12px">${fdate(f.fecha_factura||f.recibida_en)}</td><td>${f.archivo_pdf?`<span onclick="event.stopPropagation();verPdf('${f.id}')" title="Ver PDF" style="color:var(--accent);font-size:16px;cursor:pointer">📄</span>`:''}</td></tr>`).join(''):'<tr><td colspan="7" class="empty">Sin facturas</td></tr>'}</tbody></table>
+      <tbody>${all.length?all.map(f=>`<tr onclick="abrirF('${f.id}')"><td class="mono" data-label="Factura">${esc(f.numero_factura)}</td><td data-label="Centro" style="font-size:12px;color:var(--muted)">${esc(f.centro_operacion_nombre||'—')}</td><td data-label="Proveedor" style="font-weight:500">${esc(f.proveedor_nombre||f.nombre_emisor||'—')}</td><td data-label="Valor" style="font-weight:500">${fmt(f.valor_total||f.valor||0)}</td><td data-label="Estado">${bdg(f.estado)}</td><td data-label="Recibida" style="color:var(--muted);font-size:12px">${f.fecha_factura?fdate(f.fecha_factura):fdatetime(f.recibida_en)}</td><td>${f.archivo_pdf?`<span onclick="event.stopPropagation();verPdf('${f.id}')" title="Ver PDF" style="color:var(--accent);font-size:16px;cursor:pointer">📄</span>`:''}</td></tr>`).join(''):'<tr><td colspan="7" class="empty">Sin facturas</td></tr>'}</tbody></table>
     </div>`;
   refreshBadges();
 }
@@ -845,6 +846,7 @@ async function abrirF(id){
       ${f.descripcion_gasto?`<div style="grid-column:1/-1;background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Descripción del gasto</div><div style="margin-top:4px">${esc(f.descripcion_gasto)}</div></div>`:''}
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Recibida</div><div style="font-weight:500;margin-top:4px">${fdate(f.recibida_en)}</div></div>
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Límite DIAN</div><div style="font-weight:500;margin-top:4px;color:${f.dian_tacita?'var(--warning)':'inherit'}">${fdate(f.limite_dian)}${f.dian_tacita?' (tácita)':''}</div></div>
+      ${f.limite_pago?`<div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Fecha vencimiento</div><div style="font-weight:600;margin-top:4px;color:${new Date(f.limite_pago)<new Date()?'var(--danger)':'var(--success)'}">${fdate(f.limite_pago)} ${new Date(f.limite_pago)<new Date()?'(vencida)':''}</div></div>`:''}
       ${f.cufe?`<div style="grid-column:1/-1;background:var(--surface2);padding:10px 12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">CUFE</div><div style="font-family:monospace;font-size:11px;margin-top:4px;word-break:break-all">${esc(f.cufe)}</div></div>`:''}
       ${f.soporte_pago?`<div style="grid-column:1/-1;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--success);text-transform:uppercase;letter-spacing:.5px;font-weight:600">✓ Soporte de pago adjunto</div><div style="color:var(--muted);font-size:13px;margin-top:4px">${esc(f.soporte_pago_nombre||f.soporte_pago)}</div></div>`:''}
       ${f.pagada_en?`<div style="grid-column:1/-1;background:rgba(110,231,183,.1);border:1px solid rgba(110,231,183,.2);padding:12px;border-radius:8px"><div style="font-size:10px;color:#6EE7B7;text-transform:uppercase;letter-spacing:.5px;font-weight:600">✓ Pagada</div><div style="color:var(--muted);font-size:13px;margin-top:4px">${fdate(f.pagada_en)}</div></div>`:''}
@@ -1441,10 +1443,11 @@ async function rConfig(){
   $('content').innerHTML=`
     <div class="page-header"><div><div class="page-title">Configuración</div><div class="page-sub">Parámetros del sistema</div></div></div>
     
-    <div style="display:flex;gap:6px;margin-bottom:20px">
-      <button class="fb${cfgTabs==='imap'?' active':''}" onclick="cfgTabs='imap';rConfig()">📧 IMAP (Entrada)</button>
-      <button class="fb${cfgTabs==='smtp'?' active':''}" onclick="cfgTabs='smtp';rConfig()">📤 SMTP (Salida)</button>
+    <div style="display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap">
+      <button class="fb${cfgTabs==='imap'?' active':''}" onclick="cfgTabs='imap';rConfig()">📧 IMAP</button>
+      <button class="fb${cfgTabs==='smtp'?' active':''}" onclick="cfgTabs='smtp';rConfig()">📤 SMTP</button>
       <button class="fb${cfgTabs==='horas'?' active':''}" onclick="cfgTabs='horas';rConfig()">⏱️ Tiempos</button>
+      <button class="fb${cfgTabs==='actualizar'?' active':''}" onclick="cfgTabs='actualizar';rConfig()">🚀 Actualizar</button>
     </div>
     
     <div id="cfg-content">Cargando...</div>
@@ -1531,6 +1534,44 @@ function renderCfgTab(cfg){
       </div>
     `;
   }
+  else if(cfgTabs==='actualizar'){
+    c.innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
+        <div style="font-family:var(--font-head);font-size:16px;font-weight:700;margin-bottom:20px">Actualización del sistema</div>
+        
+        <div id="update-status" style="margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--surface2);border-radius:10px;margin-bottom:12px">
+            <div style="width:10px;height:10px;border-radius:50%;background:var(--accent)"></div>
+            <div style="flex:1">
+              <div style="font-weight:600" id="update-version">Versión: ${cfg.version||'—'}</div>
+              <div style="font-size:12px;color:var(--muted)" id="update-commit">Commit: ${cfg.commit||'—'}</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="checkUpdates()" id="btn-check-update">🔍 Verificar</button>
+          </div>
+          
+          <div id="update-available" style="display:none;padding:16px;background:rgba(79,190,150,.1);border:1px solid rgba(79,190,150,.3);border-radius:10px;margin-bottom:12px">
+            <div style="font-weight:600;color:var(--success);margin-bottom:8px">🎉 Nueva versión disponible</div>
+            <div id="update-changes" style="font-size:13px;color:var(--text);margin-bottom:12px"></div>
+            <div style="display:flex;gap:10px">
+              <button class="btn btn-primary" onclick="ejecutarActualizacion()" id="btn-update-now">🚀 Actualizar ahora</button>
+            </div>
+          </div>
+          
+          <div id="update-no-changes" style="display:none;padding:14px;background:var(--surface2);border-radius:10px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:8px;color:var(--success);font-weight:500">✓ Sistema actualizado</div>
+          </div>
+        </div>
+        
+        <div style="margin-top:20px">
+          <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:8px">Registro de actualizaciones</div>
+          <div id="update-log" style="background:#000;border-radius:8px;padding:12px;font-family:monospace;font-size:11px;color:#0f0;max-height:200px;overflow-y:auto;white-space:pre-wrap">Cargando...</div>
+        </div>
+      </div>
+    `;
+    
+    cargarStatusActualizacion();
+    cargarLogActualizacion();
+  }
 }
 
 async function guardarCfg(tab){
@@ -1591,6 +1632,97 @@ async function testSmtp(){
     el.innerHTML='<span style="color:var(--success)">✓ Configuración SMTP correcta</span>';
   }catch(e){
     el.innerHTML=`<span style="color:var(--danger)">✗ Error: ${esc(e.message)}</span>`;
+  }
+}
+
+// ─── ACTUALIZACIÓN ─────────────────────────────────────────────────────────
+let updatePolling=null;
+
+async function cargarStatusActualizacion(){
+  try{
+    const r=await api('GET','/configuracion/updater/status');
+    if(r.ok){
+      $('update-version').textContent=`Versión: ${r.commit||'—'}`;
+      $('update-commit').textContent=`Rama: ${r.branch||'—'} | Repo: ${r.remote||'—'}`;
+      if(r.lastUpdate){
+        const fecha=new Date(r.lastUpdate).toLocaleString('es-CO');
+        $('update-commit').textContent+=` | Última update: ${fecha}`;
+      }
+    }
+  }catch(e){console.log('Error cargando status:',e.message)}
+}
+
+async function cargarLogActualizacion(){
+  try{
+    const r=await api('GET','/configuracion/updater/logs');
+    const logEl=$('update-log');
+    if(logEl)logEl.textContent=r.log||'Sin registros';
+    logEl.scrollTop=logEl.scrollHeight;
+  }catch(e){console.log('Error cargando logs:',e.message)}
+}
+
+async function checkUpdates(){
+  const btn=$('btn-check-update');
+  btn.disabled=true;
+  btn.textContent='Verificando...';
+  try{
+    const r=await api('POST','/configuracion/updater/check');
+    const avEl=$('update-available');
+    const ncEl=$('update-no-changes');
+    if(r.hasUpdates){
+      avEl.style.display='block';
+      ncEl.style.display='none';
+      const changesEl=$('update-changes');
+      changesEl.innerHTML=`<strong>${r.commitsBehind}</strong> actualización(es) pendiente(s)<br>`+
+        (r.changes||[]).map(c=>`<div style="margin-left:12px;margin-top:4px">• ${esc(c)}</div>`).join('');
+    }else{
+      avEl.style.display='none';
+      ncEl.style.display='block';
+    }
+    await cargarLogActualizacion();
+  }catch(e){
+    toast('Error verificando: '+e.message,'error');
+  }finally{
+    btn.disabled=false;
+    btn.textContent='🔍 Verificar';
+  }
+}
+
+async function ejecutarActualizacion(){
+  if(!confirm('¿Actualizar el sistema? El servicio se reiniciará automáticamente.'))return;
+  const btn=$('btn-update-now');
+  btn.disabled=true;
+  btn.textContent='Actualizando...';
+  try{
+    const r=await api('POST','/configuracion/updater/update');
+    if(r.ok){
+      toast('Actualización iniciada. El sistema se reiniciará.','success');
+      $('update-available').style.display='none';
+      $('update-no-changes').style.display='block';
+      
+      updatePolling=setInterval(async()=>{
+        await cargarLogActualizacion();
+        try{
+          const status=await api('GET','/configuracion/updater/status');
+          if(status&&status.message?.includes('COMPLETADA')){
+            clearInterval(updatePolling);
+            toast('Sistema actualizado','success');
+            await api('POST','/configuracion/updater/restart');
+            toast('Reiniciando servicio...','info');
+            setTimeout(()=>location.reload(),3000);
+          }
+        }catch(e){}
+      },3000);
+    }else{
+      toast('Error: '+r.error,'error');
+    }
+    await cargarLogActualizacion();
+  }catch(e){
+    clearInterval(updatePolling);
+    toast('Error: '+e.message,'error');
+  }finally{
+    btn.disabled=false;
+    btn.textContent='🚀 Actualizar ahora';
   }
 }
 
