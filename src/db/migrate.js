@@ -10,15 +10,12 @@ const migrations = [
 `CREATE TABLE IF NOT EXISTS areas (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   nombre      VARCHAR(100) NOT NULL UNIQUE,
-  jefe_nombre VARCHAR(150),
+  jefe_id     UUID REFERENCES usuarios(id) ON DELETE SET NULL,
   email       VARCHAR(200),
   activo      BOOLEAN NOT NULL DEFAULT TRUE,
   creado_en   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`,
-
-// ─── 002b: Jefe como FK a usuarios ────────────────────────────────────────────
-`ALTER TABLE areas ADD COLUMN IF NOT EXISTS jefe_id UUID REFERENCES usuarios(id) ON DELETE SET NULL`,
 
 // ─── 003: Usuarios ────────────────────────────────────────────────────────────
 `CREATE TABLE IF NOT EXISTS usuarios (
