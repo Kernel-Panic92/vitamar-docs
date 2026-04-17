@@ -42,9 +42,9 @@ function getBackupFiles() {
 async function generarZip() {
   const zip = new AdmZip();
 
-  const query = (sql, fallback = []) => {
+  const query = async (sql, fallback = []) => {
     try {
-      const { rows } = db.query(sql);
+      const { rows } = await db.query(sql);
       return rows;
     } catch (e) {
       console.warn('[Backup] Query warning:', e.message);
@@ -52,12 +52,12 @@ async function generarZip() {
     }
   };
 
-  const cfg = query('SELECT clave, valor FROM configuracion');
-  const usuarios = query('SELECT id, nombre, email, rol, area_id, activo, cambio_password, creado_en FROM usuarios');
-  const areas = query('SELECT * FROM areas');
-  const cats = query('SELECT * FROM categorias_compra');
-  const centros = query('SELECT * FROM centros_operacion');
-  const facturas = query(`
+  const cfg = await query('SELECT clave, valor FROM configuracion');
+  const usuarios = await query('SELECT id, nombre, email, rol, area_id, activo, cambio_password, creado_en FROM usuarios');
+  const areas = await query('SELECT * FROM areas');
+  const cats = await query('SELECT * FROM categorias_compra');
+  const centros = await query('SELECT * FROM centros_operacion');
+  const facturas = await query(`
     SELECT f.*, p.nombre AS proveedor_nombre, p.nit AS proveedor_nit,
            c.nombre AS categoria_nombre, c.color AS categoria_color
     FROM facturas f
@@ -65,7 +65,7 @@ async function generarZip() {
     LEFT JOIN categorias_compra c ON c.id = f.categoria_id
     ORDER BY f.recibida_en DESC LIMIT 1000
   `);
-  const eventos = query('SELECT * FROM eventos_flujo ORDER BY creado_en DESC LIMIT 5000');
+  const eventos = await query('SELECT * FROM eventos_flujo ORDER BY creado_en DESC LIMIT 5000');
 
   const data = {
     app:       'VitamarDocs',
