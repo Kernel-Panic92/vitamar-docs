@@ -1,8 +1,45 @@
 const router = require('express').Router();
 const db = require('../db');
 const { authMiddleware, requireRol } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 router.use(authMiddleware);
+
+const logoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      const logoDir = path.join(process.cwd(), 'public', 'logos');
+      if (!fs.existsSync(logoDir)) fs.mkdirSync(logoDir, { recursive: true });
+      cb(null, logoDir);
+    },
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      cb(null, `logo_${Date.now()}${ext}`);
+    }
+  }),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Solo imágenes'));
+  }
+});
+
+router.post('/logo', requireRol('admin'), logoUpload.single('logo'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' });
+  
+  const url = `/logos/${req.file.filename}`;
+  
+  await db.query(
+    `INSERT INTO configuracion (clave, valor, actualizado_en) 
+     VALUES ('empresa_logo', $1, NOW()) 
+     ON CONFLICT (clave) DO UPDATE SET valor = $1, actualizado_en = NOW()`,
+    [url]
+  );
+  
+  res.json({ ok: true, url });
+});
 
 // ─── GET /api/configuracion ─────────────────────────────────────────────────
 router.get('/', requireRol('admin', 'contador'), async (req, res) => {

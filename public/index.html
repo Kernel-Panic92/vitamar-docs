@@ -247,7 +247,9 @@ input[type=password]{letter-spacing:2px}
 <!-- Login -->
 <div id="login-screen">
   <div class="login-box">
-    <div class="login-logo">VITAMAR <span>DOCS</span></div>
+    <div id="login-logo-container" style="text-align:center;margin-bottom:20px">
+      <div class="login-logo">VITAMAR <span>DOCS</span></div>
+    </div>
     <div class="login-sub">Gestión Documental de Facturas</div>
     <div class="login-title">Iniciar sesión</div>
     <div class="login-error" id="login-error"></div>
@@ -314,7 +316,7 @@ input[type=password]{letter-spacing:2px}
   <div class="mob-overlay" id="mob-overlay" onclick="closeSidebar()"></div>
 
   <div class="sidebar" id="sidebar">
-    <div class="logo">VITAMAR <span>DOCS</span></div>
+    <div class="logo" id="header-logo">VITAMAR <span>DOCS</span></div>
     <div class="user-info">
       <div class="user-name" id="u-name">—</div>
       <div class="user-role" id="u-role">—</div>
@@ -500,6 +502,13 @@ function showApp(){
   const rolClass={'admin':'role-admin','contador':'role-contador','tesorero':'role-tesorero','comprador':'role-comprador','auditor':'role-auditor'};
   $('u-badge').className=`role-badge ${rolClass[S.usuario?.rol]||'role-comprador'}`;
   $('u-badge').textContent=S.usuario?.rol||'';
+  if(S.empresaLogo){
+    $('header-logo').innerHTML='<img src="'+S.empresaLogo+'" style="height:32px;border-radius:6px"/>';
+    const loginLogo=$('login-logo-container');
+    if(loginLogo)loginLogo.innerHTML='<img src="'+S.empresaLogo+'" style="max-height:60px;max-width:200px;border-radius:8px"/>';
+  }else if(S.appNombre){
+    $('header-logo').innerHTML=S.appNombre.toUpperCase();
+  }
   buildNav();goTo('dashboard');
 }
 
@@ -1464,6 +1473,7 @@ async function rConfig(){
     <div class="page-header"><div><div class="page-title">Configuración</div><div class="page-sub">Parámetros del sistema</div></div></div>
     
     <div style="display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap">
+      <button class="fb${cfgTabs==='general'?' active':''}" onclick="cfgTabs='general';rConfig()">🏢 General</button>
       <button class="fb${cfgTabs==='imap'?' active':''}" onclick="cfgTabs='imap';rConfig()">📧 IMAP</button>
       <button class="fb${cfgTabs==='smtp'?' active':''}" onclick="cfgTabs='smtp';rConfig()">📤 SMTP</button>
       <button class="fb${cfgTabs==='horas'?' active':''}" onclick="cfgTabs='horas';rConfig()">⏱️ Tiempos</button>
@@ -1482,7 +1492,39 @@ async function renderCfgTab(cfg){
   const c=$('cfg-content');
   if(!c)return;
   
-  if(cfgTabs==='imap'){
+  if(cfgTabs==='general'){
+    const logoPreview=cfg.empresa_logo?.valor?'<img src="'+cfg.empresa_logo.valor+'" style="max-height:60px;max-width:200px;border-radius:8px;margin-top:12px"/>':'<div style="width:120px;height:60px;background:var(--surface2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;margin-top:12px">Sin logo</div>';
+    c.innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
+        <div style="font-family:var(--font-head);font-size:16px;font-weight:700;margin-bottom:20px">Personalización</div>
+        <div class="form-grid">
+          <div class="field"><label>NOMBRE DE LA EMPRESA</label><input type="text" id="cfg-empresa-nombre" value="${esc(cfg.empresa_nombre?.valor||'')}" placeholder="Mi Empresa S.A.S."/></div>
+          <div class="field"><label>NIT DE LA EMPRESA</label><input type="text" id="cfg-empresa-nit" value="${esc(cfg.empresa_nit?.valor||'')}" placeholder="901234567-1"/></div>
+        </div>
+        <div class="field"><label>LOGO DE LA EMPRESA (URL o subir)</label>
+          <input type="text" id="cfg-empresa-logo-url" value="${esc(cfg.empresa_logo?.valor||'')}" placeholder="https://ejemplo.com/logo.png"/>
+          <div style="margin-top:12px">
+            <input type="file" id="cfg-empresa-logo-file" accept="image/*" style="display:none" onchange="subirLogoEmpresa(this)"/>
+            <button class="btn btn-secondary btn-sm" onclick="$('cfg-empresa-logo-file').click()">📤 Subir imagen</button>
+            <button class="btn btn-secondary btn-sm" onclick="previsualizarLogoUrl()" style="margin-left:8px">👁️ Previsualizar</button>
+          </div>
+          <div id="cfg-logo-preview" style="margin-top:12px">${logoPreview}</div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px">
+          <button class="btn btn-primary" onclick="guardarCfg('general')">💾 Guardar</button>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
+        <div style="font-family:var(--font-head);font-size:16px;font-weight:700;margin-bottom:12px">Nombre de la aplicación</div>
+        <div class="field"><label>NOMBRE</label><input type="text" id="cfg-app-nombre" value="${esc(cfg.app_nombre?.valor||'Vitamar Docs')}" placeholder="DocFlow"/></div>
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <button class="btn btn-primary" onclick="guardarCfg('general')">💾 Guardar</button>
+        </div>
+      </div>
+    `;
+  }
+  else if(cfgTabs==='imap'){
     c.innerHTML=`
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
@@ -1764,6 +1806,18 @@ async function guardarCfg(tab){
     toast('Tareas CRON actualizadas','success');
     rConfig();
     return;
+  }else if(tab==='general'){
+    data.empresa_nombre=$('cfg-empresa-nombre')?.value?.trim()||'';
+    data.empresa_nit=$('cfg-empresa-nit')?.value?.trim()||'';
+    data.empresa_logo=$('cfg-empresa-logo-url')?.value?.trim()||'';
+    data.app_nombre=$('cfg-app-nombre')?.value?.trim()||'DocFlow';
+    const r=await api('PUT','/configuracion',data);
+    toast('Configuración guardada','success');
+    if(data.app_nombre||data.empresa_logo){
+      document.title=data.app_nombre||'DocFlow';
+    }
+    rConfig();
+    return;
   }
   try{
     await api('PUT','/configuracion',data);
@@ -1817,6 +1871,28 @@ async function verCronLogs(){
     const r=await api('GET','/configuracion/cron/logs');
     showM('Logs de Tareas',`<div style="background:#000;border-radius:8px;padding:12px;font-family:monospace;font-size:11px;color:#0f0;max-height:400px;overflow-y:auto;white-space:pre-wrap">${r.log||'(sin logs)'}</div>`,600);
   }catch(e){toast(e.message,'error')}
+}
+
+async function subirLogoEmpresa(input){
+  const file=input?.files?.[0];
+  if(!file)return;
+  const fd=new FormData();
+  fd.append('logo',file);
+  try{
+    const r=await api('POST','/configuracion/logo',fd,true);
+    if(r.url){
+      $('cfg-empresa-logo-url').value=r.url;
+      $('cfg-logo-preview').innerHTML='<img src="'+r.url+'" style="max-height:60px;max-width:200px;border-radius:8px;margin-top:12px"/>';
+      toast('Logo subido','success');
+    }
+  }catch(e){toast(e.message,'error')}
+}
+
+function previsualizarLogoUrl(){
+  const url=$('cfg-empresa-logo-url')?.value?.trim();
+  if(url){
+    $('cfg-logo-preview').innerHTML='<img src="'+esc(url)+'" style="max-height:60px;max-width:200px;border-radius:8px;margin-top:12px" onerror="this.style.display=\'none\'"/>';
+  }
 }
 
 async function testImap(){
@@ -2094,6 +2170,28 @@ async function delCentro(id,nombre){
 // ─── INIT ───────────────────────────────────────────────────────────────────
 if(S.token&&S.usuario){showApp()}else{$('app-screen').classList.remove('show');$('login-screen').style.display='flex'}
 setInterval(refreshBadges,60000);
-</script>
+
+async function cargarConfigGlobal(){
+  try{
+    const cfg=await api('GET','/configuracion');
+    if(cfg.app_nombre?.valor){
+      document.title=cfg.app_nombre.valor;
+      S.appNombre=cfg.app_nombre.valor;
+    }
+    if(cfg.empresa_logo?.valor){
+      S.empresaLogo=cfg.empresa_logo.valor;
+      const logoEl=$('header-logo');
+      if(logoEl)logoEl.innerHTML='<img src="'+cfg.empresa_logo.valor+'" style="height:32px;border-radius:6px"/>';
+      const loginLogo=$('login-logo-container');
+      if(loginLogo)loginLogo.innerHTML='<img src="'+cfg.empresa_logo.valor+'" style="max-height:60px;max-width:200px;border-radius:8px"/>';
+    }
+    if(cfg.empresa_nombre?.valor){
+      S.empresaNombre=cfg.empresa_nombre.valor;
+      const loginLogo=$('login-logo-container');
+      if(loginLogo&&!S.empresaLogo)loginLogo.innerHTML='<div class="login-logo">'+cfg.empresa_nombre.valor.toUpperCase()+'</div>';
+    }
+  }catch(e){}
+}
+cargarConfigGlobal();
 </body>
 </html>
