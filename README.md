@@ -16,7 +16,7 @@ Sistema de gestión documental para facturas electrónicas colombianas (DIAN). I
 
 ```bash
 # Clonar el repositorio
-git clone https://github.com/TU_USUARIO/vitamar-docs.git
+git clone https://github.com/Kernel-Panic92/vitamar-docs.git
 cd vitamar-docs
 
 # Ejecutar el instalador interactivo
