@@ -238,7 +238,6 @@ router.put('/horas', requireRol('admin', 'contador'), async (req, res) => {
 
 // ─── UPDATER ────────────────────────────────────────────────────────────────
 const { execSync, exec } = require('child_process');
-const fs = require('fs');
 const path = require('path');
 
 const APP_DIR = process.cwd();
