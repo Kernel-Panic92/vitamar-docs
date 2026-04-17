@@ -1,58 +1,208 @@
 # Vitamar Docs
 
-Sistema de gestión documental para facturas electrónicas de proveedores.
+Sistema de gestión documental para facturas electrónicas colombianas (DIAN). Importa automáticamente facturas desde correo IMAP, las procesa mediante un flujo de aprobación configurable y las envía a causación y pago.
 
 ## Stack
 
-- **Backend:** Node.js + Express
-- **Base de datos:** PostgreSQL
-- **Auth:** JWT
-- **Correo:** FortiMail Cloud vía IMAP
+- **Backend:** Node.js 18+ / Express
+- **Base de datos:** PostgreSQL 14+
+- **Auth:** JWT con rate limiting
+- **Correo:** IMAP (FortiMail Cloud)
 - **Jobs:** node-cron
 
 ---
 
-## Requisitos
+## Requisitos del servidor
 
-- Node.js 18+
+- Ubuntu Server 22.04 LTS (o cualquier distribución basada en Debian)
+- 2 vCPU, 4GB RAM, 40GB disco (mínimo)
 - PostgreSQL 14+
-- Acceso IMAP a la cuenta de FortiMail
+- Node.js 18+
+- Nginx (para proxy reverso y SSL)
 
 ---
 
-## Instalación
+## Instalación rápida
+
+### 1. Clonar el repositorio
 
 ```bash
-# 1. Clonar repo
-git clone https://github.com/Kernel-Panic92/vitamar-docs.git
+git clone https://github.com/TU_USUARIO/vitamar-docs.git
 cd vitamar-docs
-
-# 2. Instalar dependencias
-npm install
-
-# 3. Configurar variables de entorno
-cp .env.example .env
-# Editar .env con tus valores
-
-# 4. Crear la base de datos en PostgreSQL
-createdb vitamar_docs
-
-# 5. Correr migraciones
-npm run migrate
-
-# 6. Cargar datos iniciales (áreas, categorías, usuario admin)
-npm run seed
-
-# 7. Arrancar en desarrollo
-npm run dev
 ```
 
-La app queda disponible en `http://localhost:3100`
+### 2. Instalar dependencias del sistema
 
-**Acceso inicial:**
-- Email: `admin@vitamar.com`
-- Password: `vitamar2025`
-- ⚠️ Cambiar la contraseña en el primer acceso.
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y nodejs npm postgresql postgresql-contrib nginx \
+  certbot python3-certbot-nginx git
+```
+
+### 3. Configurar PostgreSQL
+
+```bash
+sudo -u postgres psql -c "CREATE DATABASE vitamar_docs;"
+sudo -u postgres psql -c "CREATE USER vitamar WITH ENCRYPTED PASSWORD 'TU_PASSWORD_FUERTE';"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE vitamar_docs TO vitamar;"
+sudo -u postgres psql -d vitamar_docs -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+```
+
+### 4. Instalar dependencias de Node
+
+```bash
+npm install
+```
+
+### 5. Configurar variables de entorno
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Valores mínimos necesarios:
+
+```env
+NODE_ENV=production
+PORT=3100
+HOST=0.0.0.0
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=vitamar_docs
+DB_USER=vitamar
+DB_PASSWORD=TU_PASSWORD_FUERTE
+JWT_SECRET=$(openssl rand -hex 32)
+UPLOAD_DIR=./uploads
+```
+
+### 6. Ejecutar migraciones
+
+```bash
+node src/db/migrate.js
+```
+
+### 7. Cargar datos iniciales (opcional)
+
+```bash
+node src/db/seed.js
+```
+
+### 8. Instalar PM2 y arrancar
+
+```bash
+sudo npm install -g pm2
+pm2 start src/server.js --name vitamar-docs
+pm2 startup  # Seguir instrucciones para persistir al reiniciar
+pm2 save
+```
+
+### 9. Crear carpetas de uploads
+
+```bash
+mkdir -p uploads/facturas uploads/soportes
+```
+
+---
+
+## Proxy reverso con Nginx
+
+### Crear configuración
+
+```bash
+sudo nano /etc/nginx/sites-available/vitamar-docs
+```
+
+```nginx
+server {
+    listen 80;
+    server_name TU_DOMINIO_O_IP;
+
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://127.0.0.1:3100;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/vitamar-docs /etc/nginx/sites-enabled/
+sudo rm /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### SSL con Let's Encrypt (opcional)
+
+```bash
+sudo certbot --nginx -d TU_DOMINIO
+```
+
+---
+
+## Verificación
+
+```bash
+# Verificar que el servicio está corriendo
+pm2 status
+
+# Ver logs en tiempo real
+pm2 logs vitamar-docs
+
+# Reiniciar si es necesario
+pm2 restart vitamar-docs
+```
+
+Accede a `http://TU_SERVIDOR:3100` o a través de Nginx en `http://TU_DOMINIO`
+
+---
+
+## Acceso inicial
+
+```
+Email:    admin@vitamar.com
+Password: vitamar2025
+```
+
+⚠️ Cambiar la contraseña en el primer acceso.
+
+---
+
+## Migraciones adicionales (si se actualiza desde versión anterior)
+
+Si ya tenías una base de datos, ejecuta estas migraciones manualmente:
+
+```bash
+psql -h localhost -U vitamar -d vitamar_docs -c "
+-- Agregar columna jefe_id a áreas (FK a usuarios)
+ALTER TABLE areas ADD COLUMN IF NOT EXISTS jefe_id UUID REFERENCES usuarios(id) ON DELETE SET NULL;
+
+-- Agregar columna referencia a facturas
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS referencia VARCHAR(100);
+
+-- Agregar columna orden_compra
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS orden_compra VARCHAR(100);
+
+-- Agregar columnas para soporte de pago
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS soporte_pago VARCHAR(255);
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS soporte_pago_nombre VARCHAR(255);
+ALTER TABLE facturas ADD COLUMN IF NOT EXISTS pagada_en TIMESTAMPTZ;
+
+-- Crear tabla categorías de usuario
+CREATE TABLE IF NOT EXISTS categorias_usuario (
+  usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  categoria_id UUID NOT NULL REFERENCES categorias_compra(id) ON DELETE CASCADE,
+  PRIMARY KEY (usuario_id, categoria_id)
+);
+"
+```
 
 ---
 
@@ -61,68 +211,55 @@ La app queda disponible en `http://localhost:3100`
 ```
 vitamar-docs/
 ├── src/
-│   ├── server.js              # Entry point Express
+│   ├── server.js              # Entry point
 │   ├── db/
-│   │   ├── index.js           # Pool de conexión PostgreSQL
-│   │   ├── migrate.js         # Migraciones del schema
+│   │   ├── index.js           # Pool PostgreSQL
+│   │   ├── migrate.js         # Schema migrations
 │   │   └── seed.js            # Datos iniciales
 │   ├── middleware/
-│   │   └── auth.js            # JWT + control de roles
+│   │   └── auth.js            # JWT + roles
 │   ├── routes/
-│   │   ├── auth.js            # Login, me, cambio de password
+│   │   ├── auth.js            # Login, logout, password
 │   │   ├── areas.js           # CRUD áreas
-│   │   ├── categorias.js      # CRUD categorías + asociación a áreas
-│   │   ├── facturas.js        # CRUD facturas + transiciones de estado
-│   │   └── usuarios.js        # CRUD usuarios
+│   │   ├── facturas.js        # CRUD + flujo estados
+│   │   ├── categorias.js      # Categorías de compra
+│   │   ├── centros.js         # Centros de operación
+│   │   ├── usuarios.js        # CRUD usuarios
+│   │   ├── configuracion.js   # Config IMAP/SMTP
+│   │   ├── audit.js           # Log de auditoría
+│   │   ├── backup.js          # Backup/Restore
+│   │   └── sync.js           # Sincronización IMAP
 │   └── services/
-│       ├── imap.service.js    # Ingesta automática desde FortiMail
-│       └── cron.service.js    # Jobs: escalaciones + DIAN tácita
-├── public/                    # Frontend (a agregar)
-├── uploads/facturas/          # PDFs y XMLs descargados
-├── .env.example
-└── package.json
+│       ├── imap.service.js    # Ingesta correo
+│       ├── sync-state.js      # Estado de sincronización
+│       ├── cron.service.js    # Escalaciones + DIAN
+│       └── notifications.service.js
+├── public/
+│   ├── index.html             # SPA frontend
+│   ├── app.js                 # JavaScript frontend
+│   └── reset-password.html
+├── uploads/                   # PDFs y XMLs
+├── backups/                   # Backups generados
+├── logs/                      # Logs de sync
+└── README.md
 ```
 
 ---
 
-## API Reference
+## Variables de entorno
 
-### Auth
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| POST | `/api/auth/login` | Login, retorna JWT |
-| GET | `/api/auth/me` | Usuario autenticado |
-| POST | `/api/auth/cambiar-password` | Cambiar contraseña |
-
-### Facturas
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/api/facturas` | Listar (filtros: estado, area_id, categoria_id) |
-| GET | `/api/facturas/:id` | Detalle + eventos del flujo |
-| POST | `/api/facturas` | Crear manual (multipart con PDF/XML) |
-| PATCH | `/api/facturas/:id/asignar` | Asignar área y responsable |
-| PATCH | `/api/facturas/:id/centro-costos` | Asignar CC |
-| PATCH | `/api/facturas/:id/aprobar` | Aprobar |
-| PATCH | `/api/facturas/:id/rechazar` | Rechazar con motivo |
-| PATCH | `/api/facturas/:id/causar` | Causar (tesorero/contador) |
-| PATCH | `/api/facturas/:id/pagar` | Marcar como pagada |
-| GET | `/api/facturas/:id/pdf` | Descargar PDF |
-
-### Categorías
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/api/categorias` | Listar con áreas |
-| POST | `/api/categorias` | Crear con pasos y áreas |
-| PUT | `/api/categorias/:id` | Editar |
-| DELETE | `/api/categorias/:id` | Desactivar |
-
-### Áreas y Usuarios
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/api/areas` | Listar áreas |
-| POST | `/api/areas` | Crear área |
-| GET | `/api/usuarios` | Listar usuarios (admin) |
-| POST | `/api/usuarios` | Crear usuario |
+| Variable | Descripción | Valor por defecto |
+|----------|-------------|-------------------|
+| `NODE_ENV` | Modo de operación | `development` |
+| `PORT` | Puerto del servidor | `3100` |
+| `HOST` | Host de绑定 | `0.0.0.0` |
+| `DB_HOST` | Host PostgreSQL | `localhost` |
+| `DB_PORT` | Puerto PostgreSQL | `5432` |
+| `DB_NAME` | Nombre base de datos | `vitamar_docs` |
+| `DB_USER` | Usuario PostgreSQL | `postgres` |
+| `DB_PASSWORD` | Password PostgreSQL | — |
+| `JWT_SECRET` | Clave secreta JWT | — |
+| `UPLOAD_DIR` | Carpeta uploads | `./uploads` |
 
 ---
 
@@ -130,15 +267,15 @@ vitamar-docs/
 
 | Rol | Descripción |
 |-----|-------------|
-| `admin` | Acceso total, configuración del sistema |
+| `admin` | Acceso total, configuración |
 | `contador` | Categorías, causación |
-| `tesorero` | Causación y pagos |
-| `comprador` | Revisar y aprobar facturas de su área |
+| `tesorero` | Causación, pagos |
+| `comprador` | Revisar y aprobar facturas |
 | `auditor` | Solo lectura |
 
 ---
 
-## Flujo de estados de una factura
+## Flujo de estados
 
 ```
 recibida → revision → aprobada → causada → pagada
@@ -146,56 +283,62 @@ recibida → revision → aprobada → causada → pagada
 ```
 
 ### Jobs automáticos
-- **Cada 30 min:** verifica facturas sin acción y genera escalaciones (nivel 1 → jefe área, nivel 2 → gerencia)
-- **Cada hora:** marca aceptación tácita DIAN en facturas con más de 48h sin respuesta
+- **Cada 30 min:** Verifica facturas sin acción → escalaciones
+- **Cada hora:** Marca aceptación tácita DIAN (48h sin respuesta)
 
 ---
 
-## Variables de entorno
+## Configuración IMAP
 
-## Backups
+La configuración de IMAP/SMTP se gestiona desde la GUI en **Configuración** → **IMAP**. Los valores se guardan en la tabla `configuracion` de la base de datos.
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/api/backup/lista` | Lista backups disponibles |
-| GET | `/api/backup/generar` | Genera nuevo backup (ZIP) |
-| GET | `/api/backup/descargar/:nombre` | Descarga un backup |
-| POST | `/api/backup/restaurar` | Restaura desde archivo ZIP |
-| DELETE | `/api/backup/:nombre` | Elimina un backup |
+---
 
-**El instalador también configura:**
-- Backup automático diario a las 2 AM (crontab)
-- Script `backup.sh` para backup manual
-- Restauración completa de BD + uploads
+## Backup
+
+El sistema incluye backup/restore completo desde la GUI (**Backup y Restauración**):
+
+- Exportar: Genera y descarga un ZIP con todos los datos
+- Restaurar desde servidor: Lista backups en el servidor
+- Restaurar desde archivo: Drag & drop de un ZIP
+
+---
 
 ## Rate Limiting
 
 - Máximo 5 intentos de login en 5 minutos
 - Bloqueo de 30 min tras intentos fallidos
-- Admin puede ver/desbloquear IPs en `/api/auth/ratelimit-status`
+- Admin puede ver IPs bloqueadas
 
-## Notificaciones por Email
+---
 
-El servicio SMTP está configurado para enviar notificaciones en cada transición de estado:
-- `recibida` → Email al comprador/asignado
-- `aprobada` → Email a tesorería
-- `rechazada` → Email al área
-- `escalación` → Email al jefe/gerencia
+## Actualización
 
-Configura el SMTP en la tabla `configuracion` o mediante variables de entorno.
+```bash
+cd vitamar-docs
+git pull
+npm install
+pm2 restart vitamar-docs
+```
 
-## Tema claro/oscuro
+---
 
-Toggle en la barra superior. El tema se guarda en `localStorage`.
+## Solución de problemas
 
-Ver `.env.example` para la lista completa.
+### La app no inicia
+```bash
+pm2 logs vitamar-docs
+# Verificar que PostgreSQL está corriendo
+sudo systemctl status postgresql
+```
 
-## Próximos pasos
+### Error de conexión a BD
+Verificar credenciales en `.env` y que PostgreSQL acepta conexiones desde `localhost`.
 
-- [x] Frontend mejorado (Light/Dark, Responsive)
-- [x] Rate limiting y protección fuerza bruta
-- [x] Recuperación de contraseña por email
-- [x] Backup/Restore automático
-- [x] Notificaciones SMTP en transiciones
-- [ ] Módulo de proveedores con CRUD
-- [ ] Integración con Horix
+### IMAP no sincroniza
+Verificar configuración en la GUI y que las credenciales IMAP son correctas.
+
+### Permisos en uploads
+```bash
+sudo chown -R $USER:$USER uploads backups logs
+```

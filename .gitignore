@@ -1,7 +1,28 @@
+# Dependencies
 node_modules/
+
+# Environment
 .env
+.env.local
+
+# Uploads (keep folder, ignore contents)
 uploads/facturas/*.pdf
 uploads/facturas/*.xml
+uploads/soportes/*
+!uploads/soportes/.gitkeep
+
+# Backups
+backups/*.zip
+
+# Logs
+logs/*.json
 *.log
+pm2/*.log
+
+# System
 .DS_Store
+Thumbs.db
+
+# Build
 dist/
+build/
