@@ -1516,7 +1516,11 @@ async function ejecutarBackupAhora(){
   if(!confirm('¿Ejecutar backup ahora?'))return;
   try{
     const r=await api('POST','/configuracion/backups-auto/now');
-    toast(r.message||'Backup iniciado','success');
+    if(r.path){
+      toast(`Backup guardado en: ${r.path}`,'success');
+    }else{
+      toast(r.message||'Backup completado','success');
+    }
   }catch(e){toast(e.message,'error')}
 }
 

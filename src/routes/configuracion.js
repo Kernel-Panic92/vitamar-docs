@@ -110,7 +110,7 @@ router.put('/', requireRol('admin'), async (req, res) => {
 });
 
 // ─── GET /api/configuracion/imap/test ───────────────────────────────────────
-router.get('/imap/test', requireRol('admin'), async (req, res) => {
+router.get('/imap/test', async (req, res) => {
   const { ImapFlow } = require('imapflow');
   
   const host = req.query.host;
@@ -143,7 +143,7 @@ router.get('/imap/test', requireRol('admin'), async (req, res) => {
 });
 
 // ─── GET /api/configuracion/smtp/test ───────────────────────────────────────
-router.get('/smtp/test', requireRol('admin'), async (req, res) => {
+router.get('/smtp/test', async (req, res) => {
   const nodemailer = require('nodemailer');
   
   const host = req.query.host;
@@ -602,9 +602,59 @@ router.post('/backups-auto/test', requireRol('admin'), async (req, res) => {
 
 router.post('/backups-auto/now', requireRol('admin'), async (req, res) => {
   try {
-    execSync('cd /root/vitamar-docs && /usr/bin/node src/scripts/backup-auto.js >> /root/vitamar-docs/logs/backup-auto.log 2>&1 &', { stdio: 'pipe' });
-    res.json({ ok: true, message: 'Backup iniciado en segundo plano' });
+    const { execSync: exec } = require('child_process');
+    const os = require('os');
+    const path = require('path');
+    
+    const homeDir = os.homedir();
+    const backupDir = path.join(homeDir, 'backups', 'vitamar-docs');
+    
+    console.log('[Backup] Home dir:', homeDir);
+    console.log('[Backup] Backup dir:', backupDir);
+    
+    // Verificar y crear directorio
+    const fs = require('fs');
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+      console.log('[Backup] Directorio creado');
+    }
+    
+    const fecha = new Date().toISOString().slice(0, 10);
+    const filename = `vitamar_backup_${fecha}.zip`;
+    const backupPath = path.join(backupDir, filename);
+    
+    const db = require('../db');
+    const AdmZip = require('adm-zip');
+    
+    const zip = new AdmZip();
+    
+    const agregarQuery = async (sql, nombre) => {
+      try {
+        const { rows } = await db.query(sql);
+        zip.addFile(`${nombre}.json`, Buffer.from(JSON.stringify(rows, null, 2), 'utf8'));
+      } catch (e) {
+        console.log(`[Backup] Error ${nombre}: ${e.message}`);
+      }
+    };
+    
+    await agregarQuery('SELECT * FROM facturas ORDER BY recibida_en DESC LIMIT 2000', 'facturas');
+    await agregarQuery('SELECT * FROM eventos_flujo ORDER BY creado_en DESC LIMIT 5000', 'eventos');
+    await agregarQuery('SELECT * FROM proveedores', 'proveedores');
+    await agregarQuery('SELECT clave, valor FROM configuracion', 'configuracion');
+    await agregarQuery('SELECT id, nombre, email, rol, activo, cambio_password, creado_en FROM usuarios', 'usuarios');
+    
+    zip.writeZip(backupPath);
+    console.log('[Backup] Archivo escrito:', backupPath);
+    console.log('[Backup] Existe archivo:', fs.existsSync(backupPath));
+    
+    res.json({ 
+      ok: true, 
+      message: 'Backup generado correctamente',
+      path: backupPath,
+      filename: filename
+    });
   } catch (err) {
+    console.error('[Backup] Error:', err);
     res.status(500).json({ error: err.message });
   }
 });

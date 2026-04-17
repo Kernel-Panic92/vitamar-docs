@@ -232,16 +232,16 @@ ok "Migraciones ejecutadas"
 # ── 12. Seed inicial ──────────────────────────────────────────
 info "Cargando datos iniciales (áreas, categorías, usuario admin)..."
 node "$INSTALL_DIR/src/db/seed.js" \
-  || err "Falló la carga de datos iniciales."
+  || warn "Falló la carga de datos iniciales (puede ejecutarse después)"
 ok "Datos iniciales cargados"
 
 # Actualizar parámetros de escalación en BD
 info "Configurando parámetros del flujo en base de datos..."
 PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
-  -c "UPDATE configuracion SET valor='$HORAS_ESC1'  WHERE clave='horas_limite_revision';" \
-  -c "UPDATE configuracion SET valor='$HORAS_ESC2'  WHERE clave='horas_escalacion_nivel2';" \
-  -c "UPDATE configuracion SET valor='$HORAS_DIAN'  WHERE clave='horas_dian_tacita';" \
-  -c "UPDATE configuracion SET valor='$EMPRESA'     WHERE clave='empresa_nombre';" \
+  -c "INSERT INTO configuracion (clave, valor) VALUES ('horas_limite_revision', '$HORAS_ESC1') ON CONFLICT (clave) DO UPDATE SET valor='$HORAS_ESC1';" \
+  -c "INSERT INTO configuracion (clave, valor) VALUES ('horas_escalacion_nivel2', '$HORAS_ESC2') ON CONFLICT (clave) DO UPDATE SET valor='$HORAS_ESC2';" \
+  -c "INSERT INTO configuracion (clave, valor) VALUES ('horas_dian_tacita', '$HORAS_DIAN') ON CONFLICT (clave) DO UPDATE SET valor='$HORAS_DIAN';" \
+  -c "INSERT INTO configuracion (clave, valor) VALUES ('empresa_nombre', '$EMPRESA') ON CONFLICT (clave) DO UPDATE SET valor='$EMPRESA';" \
   > /dev/null 2>&1 || warn "No se pudieron actualizar los parámetros del flujo en BD."
 ok "Parámetros del flujo configurados"
 

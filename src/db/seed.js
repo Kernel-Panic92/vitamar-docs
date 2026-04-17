@@ -12,21 +12,21 @@ async function seed() {
     // ─── Áreas ────────────────────────────────────────────────────────────────
     console.log('  → Áreas...');
     const areasData = [
-      { nombre: 'Sistemas',             jefe: 'Administrador',    email: 'sistemas@vitamar.com' },
-      { nombre: 'Dirección de Planta',  jefe: 'Director Planta',  email: 'planta@vitamar.com' },
-      { nombre: 'Logística',            jefe: 'Jefe Logística',   email: 'logistica@vitamar.com' },
-      { nombre: 'Contabilidad',         jefe: 'Jefe Contabilidad',email: 'contabilidad@vitamar.com' },
-      { nombre: 'Gerencia',             jefe: 'Gerente General',  email: 'gerencia@vitamar.com' },
+      { nombre: 'Sistemas',             email: 'sistemas@vitamar.com' },
+      { nombre: 'Dirección de Planta', email: 'planta@vitamar.com' },
+      { nombre: 'Logística',           email: 'logistica@vitamar.com' },
+      { nombre: 'Contabilidad',        email: 'contabilidad@vitamar.com' },
+      { nombre: 'Gerencia',            email: 'gerencia@vitamar.com' },
     ];
 
     const areaIds = {};
     for (const a of areasData) {
       const res = await client.query(
-        `INSERT INTO areas (nombre, jefe_nombre, email)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (nombre) DO UPDATE SET jefe_nombre=$2, email=$3
+        `INSERT INTO areas (nombre, email)
+         VALUES ($1, $2)
+         ON CONFLICT (nombre) DO UPDATE SET email=$2
          RETURNING id, nombre`,
-        [a.nombre, a.jefe, a.email]
+        [a.nombre, a.email]
       );
       areaIds[a.nombre] = res.rows[0].id;
       console.log(`     ✓ ${a.nombre}`);
@@ -35,13 +35,27 @@ async function seed() {
     // ─── Usuario admin ─────────────────────────────────────────────────────────
     console.log('\n  → Usuario administrador...');
     const hash = await bcrypt.hash('vitamar2025', 12);
-    await client.query(
+    const adminAreaId = areaIds['Sistemas'];
+    const adminRes = await client.query(
       `INSERT INTO usuarios (nombre, email, password_hash, rol, area_id)
        VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (email) DO NOTHING`,
-      ['Administrador', 'admin@vitamar.com', hash, 'admin', areaIds['Sistemas']]
+       ON CONFLICT (email) DO UPDATE SET password_hash=$3, rol=$4
+       RETURNING id`,
+      ['Administrador', 'admin@vitamar.com', hash, 'admin', adminAreaId]
     );
-    console.log('     ✓ admin@vitamar.com / vitamar2025');
+    const adminId = adminRes.rows[0].id;
+    console.log('     ✓ admin@vitamar.com');
+
+    // Asignar admin como jefe de Sistemas
+    try {
+      await client.query(
+        'UPDATE areas SET jefe_id = $1 WHERE nombre = $2',
+        [adminId, 'Sistemas']
+      );
+      console.log('     ✓ Admin asignado como jefe de Sistemas');
+    } catch (e) {
+      console.log('     ⚠ No se pudo asignar jefe (se hará después)');
+    }
 
     // ─── Categorías de compra ─────────────────────────────────────────────────
     console.log('\n  → Categorías de compra...');

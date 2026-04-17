@@ -10,7 +10,6 @@ const migrations = [
 `CREATE TABLE IF NOT EXISTS areas (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   nombre      VARCHAR(100) NOT NULL UNIQUE,
-  jefe_id     UUID REFERENCES usuarios(id) ON DELETE SET NULL,
   email       VARCHAR(200),
   activo      BOOLEAN NOT NULL DEFAULT TRUE,
   creado_en   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -198,6 +197,9 @@ ON CONFLICT (clave) DO NOTHING`,
 
 // ─── 015: Actualizar tabla usuarios ────────────────────────────────────────────
 `ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS cambio_password BOOLEAN NOT NULL DEFAULT FALSE`,
+
+// ─── 015b: Agregar jefe_id a áreas ──────────────────────────────────────────────
+`ALTER TABLE areas ADD COLUMN IF NOT EXISTS jefe_id UUID REFERENCES usuarios(id) ON DELETE SET NULL`,
 
 // ─── 016: Función updated_at automático ──────────────────────────────────────
 `CREATE OR REPLACE FUNCTION set_updated_at()
