@@ -1467,6 +1467,9 @@ async function rConfig(){
       <button class="fb${cfgTabs==='imap'?' active':''}" onclick="cfgTabs='imap';rConfig()">📧 IMAP</button>
       <button class="fb${cfgTabs==='smtp'?' active':''}" onclick="cfgTabs='smtp';rConfig()">📤 SMTP</button>
       <button class="fb${cfgTabs==='horas'?' active':''}" onclick="cfgTabs='horas';rConfig()">⏱️ Tiempos</button>
+      <button class="fb${cfgTabs==='seguridad'?' active':''}" onclick="cfgTabs='seguridad';rConfig()">🔒 Seguridad</button>
+      <button class="fb${cfgTabs==='backups'?' active':''}" onclick="cfgTabs='backups';rConfig()">💾 Backups</button>
+      <button class="fb${cfgTabs==='cron'?' active':''}" onclick="cfgTabs='cron';rConfig()">⏰ Tareas</button>
       <button class="fb${cfgTabs==='actualizar'?' active':''}" onclick="cfgTabs='actualizar';rConfig()">🚀 Actualizar</button>
     </div>
     
@@ -1592,6 +1595,104 @@ function renderCfgTab(cfg){
     cargarStatusActualizacion();
     cargarLogActualizacion();
   }
+  else if(cfgTabs==='seguridad'){
+    const r=await api('GET','/configuracion/seguridad');
+    c.innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <div><div style="font-family:var(--font-head);font-size:16px;font-weight:700">Protección Fail2ban</div><div style="font-size:13px;color:var(--muted);margin-top:4px">Protección contra ataques de fuerza bruta</div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="badge ${r.fail2ban?.installed?'b-aprobada':'b-revision'}">${r.fail2ban?.installed?'Instalado':'No instalado'}</span>
+            ${r.fail2ban?.installed?'<span class="badge '+(r.fail2ban?.active?'b-aprobada':'b-revision')+'">'+(r.fail2ban?.active?'Activo':'Inactivo')+'</span>':''}
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>HABILITAR FAIL2BAN</label>
+            <select id="cfg-fail2ban-enabled">
+              <option value="true" ${r.config?.fail2ban_enabled==='true'?'selected':''}>Sí</option>
+              <option value="false" ${r.config?.fail2ban_enabled!=='true'?'selected':''}>No</option>
+            </select>
+          </div>
+          <div class="field"><label>TIEMPO DE BAN (segundos)</label><input type="number" id="cfg-fail2ban-bantime" value="${r.config?.fail2ban_bantime||'3600'}" placeholder="3600"/></div>
+          <div class="field"><label>VENTANA DE TIEMPO (segundos)</label><input type="number" id="cfg-fail2ban-findtime" value="${r.config?.fail2ban_findtime||'600'}" placeholder="600"/></div>
+          <div class="field"><label>MÁXIMO REINTENTOS</label><input type="number" id="cfg-fail2ban-maxretry" value="${r.config?.fail2ban_maxretry||'10'}" placeholder="10"/></div>
+        </div>
+        ${r.fail2ban?.installed?'<div style="display:flex;gap:10px;margin-top:16px"><button class="btn btn-secondary btn-sm" onclick="f2bAction(\'start\')">▶ Iniciar</button><button class="btn btn-secondary btn-sm" onclick="f2bAction(\'stop\')">⏹ Detener</button><button class="btn btn-secondary btn-sm" onclick="f2bAction(\'restart\')">↻ Reiniciar</button></div>':''}
+        <div style="display:flex;gap:10px;margin-top:20px">
+          <button class="btn btn-primary" onclick="guardarCfg('seguridad')">💾 Guardar</button>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <div><div style="font-family:var(--font-head);font-size:16px;font-weight:700">Rate Limiting</div><div style="font-size:13px;color:var(--muted);margin-top:4px">Límite de peticiones por IP</div></div>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>VENTANA DE TIEMPO (segundos)</label><input type="number" id="cfg-rate-window" value="${r.config?.rate_limit_window||'900'}" placeholder="900"/></div>
+          <div class="field"><label>MÁXIMO PETICIONES</label><input type="number" id="cfg-rate-max" value="${r.config?.rate_limit_max||'100'}" placeholder="100"/></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px">
+          <button class="btn btn-primary" onclick="guardarCfg('seguridad')">💾 Guardar</button>
+        </div>
+      </div>
+    `;
+  }
+  else if(cfgTabs==='backups'){
+    const r=await api('GET','/configuracion/backups-auto');
+    c.innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <div><div style="font-family:var(--font-head);font-size:16px;font-weight:700">Backups Automáticos</div><div style="font-size:13px;color:var(--muted);margin-top:4px">Guarda automáticamente en la NAS</div></div>
+          <span class="badge ${r.config?.backup_auto_enabled==='true'?'b-aprobada':'b-revision'}">${r.config?.backup_auto_enabled==='true'?'Activo':'Inactivo'}</span>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>HABILITAR BACKUPS AUTOMÁTICOS</label>
+            <select id="cfg-backup-auto-enabled">
+              <option value="true" ${r.config?.backup_auto_enabled==='true'?'selected':''}>Sí</option>
+              <option value="false" ${r.config?.backup_auto_enabled!=='true'?'selected':''}>No</option>
+            </select>
+          </div>
+          <div class="field"><label>FRECUENCIA (cron)</label><input type="text" id="cfg-backup-auto-cron" value="${r.config?.backup_auto_cron||'0 2 * * *'}" placeholder="0 2 * * *"/><div style="font-size:11px;color:var(--muted);margin-top:4px">Formato: minuto hora día mes díaSemana. Ej: "0 2 * * *" = diario a las 2am</div></div>
+          <div class="field full"><label>RUTA NAS</label><input type="text" id="cfg-backup-auto-path" value="${r.config?.backup_auto_path||'/mnt/vitamar-nas/backup'}" placeholder="/mnt/vitamar-nas/backup"/></div>
+          <div class="field"><label>RETENCIÓN (días)</label><input type="number" id="cfg-backup-auto-retention" value="${r.config?.backup_auto_retention||'7'}" placeholder="7"/></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--surface2);border-radius:8px;margin:16px 0">
+          <span style="font-size:13px;color:var(--muted)">NAS conectada:</span>
+          <span class="badge ${r.nasMounted?'b-aprobada':'b-revision'}">${r.nasMounted?'Sí':'No'}</span>
+          <button class="btn btn-secondary btn-sm" onclick="testBackupPath()">🧪 Probar ruta</button>
+        </div>
+        ${r.lastBackup?'<div style="font-size:12px;color:var(--muted)">Último backup: '+r.lastBackup.split('/').pop()+'</div>':''}
+        <div style="display:flex;gap:10px;margin-top:20px">
+          <button class="btn btn-primary" onclick="guardarCfg('backups')">💾 Guardar</button>
+        </div>
+      </div>
+    `;
+  }
+  else if(cfgTabs==='cron'){
+    const r=await api('GET','/configuracion/cron');
+    c.innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <div><div style="font-family:var(--font-head);font-size:16px;font-weight:700">Tareas Programadas</div><div style="font-size:13px;color:var(--muted);margin-top:4px">Configura la frecuencia de las tareas automáticas</div></div>
+        </div>
+        <div class="form-grid">
+          <div class="field full"><label>SYNC CORREO IMAP</label><input type="text" id="cfg-cron-imap" value="${r.config?.cron_imap||'*/15 * * * *'}" placeholder="*/15 * * * *"/><div style="font-size:11px;color:var(--muted);margin-top:4px">Ej: "*/15 * * * *" = cada 15 minutos</div></div>
+          <div class="field full"><label>ESCALACIONES</label><input type="text" id="cfg-cron-escalaciones" value="${r.config?.cron_escalaciones||'0 * * * *'}" placeholder="0 * * * *"/><div style="font-size:11px;color:var(--muted);margin-top:4px">Ej: "0 * * * *" = cada hora</div></div>
+          <div class="field full"><label>VERIFICACIÓN DIAN TÁCITA</label><input type="text" id="cfg-cron-dian" value="${r.config?.cron_dian||'0 6 * * *'}" placeholder="0 6 * * *"/><div style="font-size:11px;color:var(--muted);margin-top:4px">Ej: "0 6 * * *" = diario a las 6am</div></div>
+          <div class="field full"><label>NOTIFICACIONES</label><input type="text" id="cfg-cron-notificaciones" value="${r.config?.cron_notificaciones||'0 8 * * *'}" placeholder="0 8 * * *"/><div style="font-size:11px;color:var(--muted);margin-top:4px">Ej: "0 8 * * *" = diario a las 8am</div></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px">
+          <button class="btn btn-primary" onclick="guardarCfg('cron')">💾 Guardar</button>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px">
+        <div style="font-family:var(--font-head);font-size:14px;font-weight:700;margin-bottom:12px">CRON activo</div>
+        <div style="background:#000;border-radius:8px;padding:12px;font-family:monospace;font-size:11px;color:#0f0;max-height:150px;overflow-y:auto;white-space:pre-wrap">${r.crontab?.join('\n')||'(vacío)'}</div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="verCronLogs()">📋 Ver logs</button>
+      </div>
+    `;
+  }
 }
 
 async function guardarCfg(tab){
@@ -1613,11 +1714,65 @@ async function guardarCfg(tab){
     data.horas_limite_revision=$('cfg-horas-revision')?.value?.trim()||'24';
     data.horas_escalacion_nivel2=$('cfg-horas-nivel2')?.value?.trim()||'48';
     data.horas_dian_tacita=$('cfg-horas-dian')?.value?.trim()||'48';
+  }else if(tab==='seguridad'){
+    data.fail2ban_enabled=$('cfg-fail2ban-enabled')?.value||'false';
+    data.fail2ban_bantime=$('cfg-fail2ban-bantime')?.value?.trim()||'3600';
+    data.fail2ban_findtime=$('cfg-fail2ban-findtime')?.value?.trim()||'600';
+    data.fail2ban_maxretry=$('cfg-fail2ban-maxretry')?.value?.trim()||'10';
+    data.rate_limit_window=$('cfg-rate-window')?.value?.trim()||'900';
+    data.rate_limit_max=$('cfg-rate-max')?.value?.trim()||'100';
+    const r=await api('PUT','/configuracion/seguridad',data);
+    toast('Configuración de seguridad guardada','success');
+    rConfig();
+    return;
+  }else if(tab==='backups'){
+    data.backup_auto_enabled=$('cfg-backup-auto-enabled')?.value||'false';
+    data.backup_auto_cron=$('cfg-backup-auto-cron')?.value?.trim()||'';
+    data.backup_auto_path=$('cfg-backup-auto-path')?.value?.trim()||'/mnt/vitamar-nas/backup';
+    data.backup_auto_retention=$('cfg-backup-auto-retention')?.value?.trim()||'7';
+    const r=await api('PUT','/configuracion/backups-auto',data);
+    toast('Configuración de backups guardada','success');
+    rConfig();
+    return;
+  }else if(tab==='cron'){
+    const r=await api('PUT','/configuracion/cron',{
+      cron_imap:$('cfg-cron-imap')?.value?.trim()||'',
+      cron_escalaciones:$('cfg-cron-escalaciones')?.value?.trim()||'',
+      cron_dian:$('cfg-cron-dian')?.value?.trim()||'',
+      cron_notificaciones:$('cfg-cron-notificaciones')?.value?.trim()||''
+    });
+    toast('Tareas CRON actualizadas','success');
+    rConfig();
+    return;
   }
   try{
     await api('PUT','/configuracion',data);
     toast('Configuración guardada','success');
     if(tab==='horas'){rConfig()}
+  }catch(e){toast(e.message,'error')}
+}
+
+async function f2bAction(action){
+  try{
+    const r=await api('POST','/configuracion/seguridad/fail2ban/action',{action});
+    toast(r.message||'Acción ejecutada','success');
+    rConfig();
+  }catch(e){toast(e.message,'error')}
+}
+
+async function testBackupPath(){
+  const path=$('cfg-backup-auto-path')?.value?.trim();
+  if(!path){toast('Ingresa la ruta','error');return}
+  try{
+    const r=await api('POST','/configuracion/backups-auto/test',{path});
+    toast('Ruta accesible para escritura','success');
+  }catch(e){toast(e.message,'error')}
+}
+
+async function verCronLogs(){
+  try{
+    const r=await api('GET','/configuracion/cron/logs');
+    showM('Logs de Tareas',`<div style="background:#000;border-radius:8px;padding:12px;font-family:monospace;font-size:11px;color:#0f0;max-height:400px;overflow-y:auto;white-space:pre-wrap">${r.log||'(sin logs)'}</div>`,600);
   }catch(e){toast(e.message,'error')}
 }
 

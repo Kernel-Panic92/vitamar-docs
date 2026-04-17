@@ -357,4 +357,258 @@ router.get('/updater/logs', requireRol('admin'), (req, res) => {
   res.json({ log: getUpdaterLog() });
 });
 
+// ─── SEGURIDAD ───────────────────────────────────────────────────────────────
+router.get('/seguridad', requireRol('admin'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT clave, valor FROM configuracion 
+       WHERE clave IN ('rate_limit_window','rate_limit_max','fail2ban_enabled','fail2ban_bantime','fail2ban_findtime','fail2ban_maxretry')
+       ORDER BY clave`
+    );
+    
+    const cfg = {};
+    for (const row of rows) cfg[row.clave] = row.valor || '';
+    
+    let fail2banStatus = { installed: false, active: false };
+    try {
+      const installed = execSync('which fail2ban-client 2>/dev/null && echo yes || echo no').toString().trim();
+      fail2banStatus.installed = installed === 'yes';
+      if (fail2banStatus.installed) {
+        const active = execSync('systemctl is-active fail2ban 2>/dev/null || echo inactive').toString().trim();
+        fail2banStatus.active = active === 'active';
+      }
+    } catch (e) {}
+    
+    res.json({ config: cfg, fail2ban: fail2banStatus });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/seguridad', requireRol('admin'), async (req, res) => {
+  const { rate_limit_window, rate_limit_max, fail2ban_enabled, fail2ban_bantime, fail2ban_findtime, fail2ban_maxretry } = req.body;
+  
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    
+    const updates = [
+      ['rate_limit_window', rate_limit_window],
+      ['rate_limit_max', rate_limit_max],
+      ['fail2ban_enabled', fail2ban_enabled],
+      ['fail2ban_bantime', fail2ban_bantime],
+      ['fail2ban_findtime', fail2ban_findtime],
+      ['fail2ban_maxretry', fail2ban_maxretry],
+    ];
+    
+    for (const [clave, valor] of updates) {
+      if (valor !== undefined) {
+        await client.query(
+          `INSERT INTO configuracion (clave, valor, actualizado_en) 
+           VALUES ($1, $2, NOW()) 
+           ON CONFLICT (clave) DO UPDATE SET valor = $2, actualizado_en = NOW()`,
+          [clave, String(valor || '')]
+        );
+      }
+    }
+    
+    if (fail2ban_enabled === 'true') {
+      try {
+        execSync(`cat > /etc/fail2ban/jail.local << 'EOF'
+[vitamar-api]
+enabled = true
+port = 3100
+filter = vitamar-api
+logpath = /root/vitamar-docs/logs/*.log
+maxretry = ${fail2ban_maxretry || 10}
+bantime = ${fail2ban_bantime || 3600}
+findtime = ${fail2ban_findtime || 600}
+action = iptables-allports[name=vitamar]
+EOF`, { stdio: 'pipe' });
+        
+        execSync('systemctl restart fail2ban 2>/dev/null || true', { stdio: 'pipe' });
+      } catch (e) {}
+    }
+    
+    await client.query('COMMIT');
+    res.json({ ok: true, message: 'Configuración de seguridad guardada' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/seguridad/fail2ban/action', requireRol('admin'), async (req, res) => {
+  const { action } = req.body;
+  
+  if (!['start', 'stop', 'restart', 'reload'].includes(action)) {
+    return res.status(400).json({ error: 'Acción inválida' });
+  }
+  
+  try {
+    execSync(`systemctl ${action} fail2ban 2>/dev/null || true`, { stdio: 'pipe' });
+    res.json({ ok: true, message: `Fail2ban ${action}ido` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── BACKUPS AUTOMÁTICOS ───────────────────────────────────────────────────
+router.get('/backups-auto', requireRol('admin'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT clave, valor FROM configuracion 
+       WHERE clave IN ('backup_auto_enabled','backup_auto_cron','backup_auto_path','backup_auto_retention')
+       ORDER BY clave`
+    );
+    
+    const cfg = {};
+    for (const row of rows) cfg[row.clave] = row.valor || '';
+    
+    const nasMounted = fs.existsSync('/mnt/vitamar-nas/backup') || fs.existsSync('/media/vitamar-nas/backup');
+    const backupsPath = cfg.backup_auto_path || '/mnt/vitamar-nas/backup';
+    const lastBackup = fs.existsSync(backupsPath) 
+      ? execSync(`ls -t ${backupsPath}/vitamar_backup_*.zip 2>/dev/null | head -1 || echo none`).toString().trim()
+      : 'none';
+    
+    res.json({ 
+      config: cfg, 
+      nasMounted,
+      lastBackup: lastBackup !== 'none' ? lastBackup : null,
+      availablePath: backupsPath
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/backups-auto', requireRol('admin'), async (req, res) => {
+  const { backup_auto_enabled, backup_auto_cron, backup_auto_path, backup_auto_retention } = req.body;
+  
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    
+    const updates = [
+      ['backup_auto_enabled', backup_auto_enabled],
+      ['backup_auto_cron', backup_auto_cron],
+      ['backup_auto_path', backup_auto_path],
+      ['backup_auto_retention', backup_auto_retention],
+    ];
+    
+    for (const [clave, valor] of updates) {
+      if (valor !== undefined) {
+        await client.query(
+          `INSERT INTO configuracion (clave, valor, actualizado_en) 
+           VALUES ($1, $2, NOW()) 
+           ON CONFLICT (clave) DO UPDATE SET valor = $2, actualizado_en = NOW()`,
+          [clave, String(valor || '')]
+        );
+      }
+    }
+    
+    if (backup_auto_enabled === 'true' && backup_auto_cron) {
+      const cronCmd = `cd /root/vitamar-docs && /usr/bin/node src/scripts/backup-auto.js >> /root/vitamar-docs/logs/backup-auto.log 2>&1`;
+      execSync(`(crontab -l 2>/dev/null | grep -v 'backup-auto'; echo "${backup_auto_cron} ${cronCmd}") | crontab -`, { stdio: 'pipe' });
+    } else {
+      execSync(`crontab -l 2>/dev/null | grep -v 'backup-auto' | crontab -`, { stdio: 'pipe' });
+    }
+    
+    await client.query('COMMIT');
+    res.json({ ok: true, message: 'Configuración de backups automáticos guardada' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/backups-auto/test', requireRol('admin'), async (req, res) => {
+  const backupPath = req.body.path || '/mnt/vitamar-nas/backup';
+  
+  try {
+    const testFile = path.join(backupPath, '.vitamar-test');
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
+    res.json({ ok: true, message: 'Ruta accesible para escritura' });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: `No se puede escribir en ${backupPath}: ${err.message}` });
+  }
+});
+
+// ─── TAREAS CRON ────────────────────────────────────────────────────────────
+router.get('/cron', requireRol('admin'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT clave, valor FROM configuracion 
+       WHERE clave IN ('cron_imap','cron_escalaciones','cron_dian','cron_notificaciones')
+       ORDER BY clave`
+    );
+    
+    const cfg = {};
+    for (const row of rows) cfg[row.clave] = row.valor || '';
+    
+    let currentCrons = [];
+    try {
+      const crontab = execSync('crontab -l 2>/dev/null || echo ""').toString();
+      currentCrons = crontab.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+    } catch (e) {}
+    
+    res.json({ config: cfg, crontab: currentCrons });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/cron', requireRol('admin'), async (req, res) => {
+  const { cron_imap, cron_escalaciones, cron_dian, cron_notificaciones } = req.body;
+  
+  try {
+    const imapCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/imap.service\').pollCorreo()" >> /root/vitamar-docs/logs/imap.log 2>&1';
+    const escCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/cron.service\').ejecutarEscalaciones()" >> /root/vitamar-docs/logs/cron.log 2>&1';
+    const dianCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/cron.service\').verificarDianTacita()" >> /root/vitamar-docs/logs/cron.log 2>&1';
+    const notifCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/cron.service\').enviarNotificaciones()" >> /root/vitamar-docs/logs/cron.log 2>&1';
+    
+    const lines = ['# Vitamar Docs - Tareas programadas'];
+    
+    if (cron_imap) lines.push(`${cron_imap} ${imapCmd}`);
+    if (cron_escalaciones) lines.push(`${cron_escalaciones} ${escCmd}`);
+    if (cron_dian) lines.push(`${cron_dian} ${dianCmd}`);
+    if (cron_notificaciones) lines.push(`${cron_notificaciones} ${notifCmd}`);
+    
+    const newCrontab = lines.join('\n') + '\n';
+    execSync(`echo "${newCrontab}" | crontab -`, { stdio: 'pipe' });
+    
+    await db.query(
+      `INSERT INTO configuracion (clave, valor, actualizado_en) VALUES 
+       ('cron_imap', $1, NOW()), ('cron_escalaciones', $2, NOW()), 
+       ('cron_dian', $3, NOW()), ('cron_notificaciones', $4, NOW())
+       ON CONFLICT (clave) DO UPDATE SET valor=EXCLUDED.valor, actualizado_en=NOW()`,
+      [cron_imap || '', cron_escalaciones || '', cron_dian || '', cron_notificaciones || '']
+    );
+    
+    res.json({ ok: true, message: 'Tareas CRON actualizadas' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/cron/logs', requireRol('admin'), (req, res) => {
+  const logPath = path.join(APP_DIR, 'logs', 'cron.log');
+  try {
+    if (fs.existsSync(logPath)) {
+      const content = fs.readFileSync(logPath, 'utf8');
+      const lines = content.split('\n').filter(l => l.trim()).slice(-50);
+      res.json({ log: lines.join('\n') });
+    } else {
+      res.json({ log: '' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
