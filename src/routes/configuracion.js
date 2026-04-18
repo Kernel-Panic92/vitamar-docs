@@ -600,28 +600,29 @@ router.post('/backups-auto/test', requireRol('admin'), async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Faltan parámetros requeridos' });
   }
   
-  if (type === 'smb' && host) {
-    host = host.replace(/[^a-zA-Z0-9._\-\/]/g, '');
-    user = user.replace(/[^a-zA-Z0-9._\-@]/g, '');
-    pass = pass.replace(/["`$]/g, '');
-    
-    const safeUrl = `smb://${encodeURIComponent(host.replace(/\\/g, '/'))}/`;
-    const test = execSync(`curl -s -u "${user}:${pass}" --connect-timeout 5 "${safeUrl}" 2>&1 || echo "FAIL"`, { stdio: 'pipe' }).toString();
-    if (test.includes('FAIL')) {
-      return res.status(400).json({ ok: false, error: 'No se pudo conectar al servidor SMB' });
+  try {
+    if (type === 'smb' && host) {
+      host = host.replace(/[^a-zA-Z0-9._\-\/]/g, '');
+      user = user.replace(/[^a-zA-Z0-9._\-@]/g, '');
+      pass = pass.replace(/["`$]/g, '');
+      
+      const safeUrl = `smb://${encodeURIComponent(host.replace(/\\/g, '/'))}/`;
+      const test = execSync(`curl -s -u "${user}:${pass}" --connect-timeout 5 "${safeUrl}" 2>&1 || echo "FAIL"`, { stdio: 'pipe' }).toString();
+      if (test.includes('FAIL')) {
+        return res.status(400).json({ ok: false, error: 'No se pudo conectar al servidor SMB' });
+      }
+      res.json({ ok: true, message: 'Conexión SMB exitosa' });
+    } else {
+      const testDir = backupPath || '/mnt/vitamar-nas/backup';
+      if (!fs.existsSync(testDir)) {
+        return res.status(400).json({ ok: false, error: `Directorio no existe: ${testDir}` });
+      }
+      const testFile = path.join(testDir, '.vitamar-test');
+      fs.writeFileSync(testFile, 'test');
+      fs.unlinkSync(testFile);
+      res.json({ ok: true, message: 'Ruta accesible para escritura' });
     }
-    res.json({ ok: true, message: 'Conexión SMB exitosa' });
-  } else {
-    const testDir = backupPath || '/mnt/vitamar-nas/backup';
-    if (!fs.existsSync(testDir)) {
-      return res.status(400).json({ ok: false, error: `Directorio no existe: ${testDir}` });
-    }
-    const testFile = path.join(testDir, '.vitamar-test');
-    fs.writeFileSync(testFile, 'test');
-    fs.unlinkSync(testFile);
-    res.json({ ok: true, message: 'Ruta accesible para escritura' });
-  }
-} catch (err) {
+  } catch (err) {
     res.status(400).json({ ok: false, error: `Error probando conexión: ${err.message}` });
   }
 });
