@@ -66,9 +66,27 @@ function construirFiltroCategorias(usuario) {
 }
 
 // GET /api/facturas/badge-stats
-router.get('/badge-stats', (req, res) => {
-  console.log('[badge-stats] called');
-  res.json({ total: 0, pendientes_urgentes: 0 });
+router.get('/badge-stats', async (req, res) => {
+  try {
+    const totalRes = await db.query('SELECT COUNT(*) as total FROM facturas');
+    
+    const tresDias = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    const urgenteRes = await db.query(
+      `SELECT COUNT(*) as total FROM facturas f 
+       WHERE f.estado IN ('recibida','aprobada') 
+       AND f.fecha_limite_pago IS NOT NULL
+       AND f.fecha_limite_pago <= $1`,
+      [tresDias]
+    );
+    
+    res.json({ 
+      total: parseInt(totalRes.rows[0].total), 
+      pendientes_urgentes: parseInt(urgenteRes.rows[0].total) 
+    });
+  } catch (err) {
+    console.error('[badge-stats] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/facturas/pendientes
