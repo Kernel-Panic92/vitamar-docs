@@ -848,7 +848,7 @@ async function mUser(id){
     const catIds=[...document.querySelectorAll('.ucat:checked')].map(el=>el.value);
     try{
       if(id){
-        const userRes = await api('PUT',`/usuarios/${id}`,{
+        await api('PUT',`/usuarios/${id}`,{
           nombre:$('un')?.value?.trim(),
           email:$('ue')?.value?.trim(),
           rol:$('ur')?.value,
@@ -856,10 +856,7 @@ async function mUser(id){
           activo:$('ua-activo')?.checked??true,
           password:$('up')?.value||null
         });
-        console.log('User saved:', userRes);
-        
-        const catRes = await api('PUT',`/categorias/usuario/${id}`,{categoria_ids:catIds});
-        console.log('Categories saved:', catRes);
+        await api('PUT',`/categorias/usuario/${id}`,{categoria_ids:catIds});
       }else{
         await api('POST','/usuarios',{
           nombre:$('un')?.value?.trim(),
@@ -872,7 +869,7 @@ async function mUser(id){
       closeM();
       toast('Usuario guardado','success');
       await rUsers();
-    }catch(e){console.error('Error saving user:', e);toast(e.message,'error')}
+    }catch(e){toast(e.message,'error')}
   };
   
   showM(id?'Editar usuario':'Nuevo usuario',`

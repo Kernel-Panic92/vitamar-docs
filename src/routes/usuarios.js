@@ -1,5 +1,3 @@
-const fs = require('fs');
-const path = require('path');
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const db = require('../db');
@@ -64,18 +62,10 @@ router.post('/', requireRol('admin'), async (req, res) => {
 // PUT /api/usuarios/:id
 router.put('/:id', requireRol('admin'), async (req, res) => {
   try {
-    const debugLog = `/root/vitamar-docs/logs/debug.log`;
-    fs.appendFileSync(debugLog, `PUT usuarios/${req.params.id} body: ${JSON.stringify(req.body)}\n`);
-    
     const { nombre, rol, area_id, activo, password } = req.body;
     const userId = req.params.id;
     
-    console.error('[DEBUG] ===== PUT /usuarios/' + userId + ' =====');
-    console.error('[DEBUG] nombre:', nombre, 'rol:', rol, 'area_id:', area_id, 'activo:', activo);
-    console.error('[DEBUG] password provided:', !!password, 'length:', password ? password.length : 0);
-    
     let params = [nombre?.trim(), rol, !!activo];
-    
     let query = 'UPDATE usuarios SET nombre = $1, rol = $2, activo = $3';
     
     if (area_id && area_id !== '') {
@@ -92,14 +82,10 @@ router.put('/:id', requireRol('admin'), async (req, res) => {
     params.push(userId);
     query += ', actualizado_en = NOW() WHERE id = $' + params.length + ' RETURNING id, nombre, email, rol, area_id, activo';
     
-    fs.appendFileSync(debugLog, `Query: ${query}\nParams: ${params.length} items\n`);
-    
     const { rows } = await db.query(query, params);
-    fs.appendFileSync(debugLog, `Query executed, rows: ${rows.length}\n`);
     if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json(rows[0]);
   } catch (err) {
-    fs.appendFileSync(debugLog, `ERROR: ${err.message}\n`);
     res.status(500).json({ error: err.message });
   }
 });
