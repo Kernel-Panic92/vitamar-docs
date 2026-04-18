@@ -1005,14 +1005,146 @@ async function descargarBackup(tipo='completo'){
   
   const token=localStorage.getItem('vd_t');
   
-  // Verificar conexión primero
+// Verificar conexión primero
   try{
-    await fetch('/api/backup?action=generate&tipo=config',{headers:{Authorization:`Bearer ${token}`}});
+    await fetch('/api/backup?action=status&_='+Date.now(),{headers:{Authorization:`Bearer ${token}`}});
   }catch(e){
     btn.disabled=false;btn.textContent=label;
     toast('Sin conexión al servidor','error');
     return;
   }
+  
+  btn.textContent='Generando...';
+  const progresoEl=document.getElementById('mroot');
+  progresoEl.innerHTML=`<div class="modal-overlay open">
+    <div class="modal" style="max-width:520px">
+      <div style="font-family:var(--font-head);font-size:18px;font-weight:700;margin-bottom:16px">
+        ${tipo==='config'?'⚙️ Backup de Configuración':'💾 Backup Completo'}
+      </div>
+      <div id="backup-progress-msg" style="font-size:14px;color:var(--muted);margin-bottom:12px">Iniciando...</div>
+      <div style="background:var(--surface2);border-radius:6px;height:10px;overflow:hidden;margin-bottom:16px">
+        <div id="backup-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width .5s"></div>
+      </div>
+      <div id="backup-terminal" style="background:#1a1a1a;color:#00ff00;font-family:monospace;font-size:11px;padding:12px;border-radius:6px;height:120px;overflow-y:auto;line-height:1.6;margin-bottom:16px">
+        <div style="opacity:0.7">[...] Iniciando backup...</div>
+      </div>
+      <div style="display:flex;justify-content:center">
+        <button class="btn btn-secondary" onclick="window.cancelarBackupGen()">Cancelar</button>
+      </div>
+    </div>
+  </div>`;
+  
+  let cancelled=false;
+  let pollInterval=null;
+  
+  window.cancelarBackupGen=function(){
+    cancelled=true;
+    if(pollInterval)clearInterval(pollInterval);
+    closeM();
+    btn.disabled=false;btn.textContent=label;
+  };
+  
+  try{
+    // Paso 1: Iniciar backup (async)
+    const url='/api/backup?action=generate&tipo='+tipo+'&_='+Date.now();
+    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] URL: '+url+'</div>';
+    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Tipo: '+(tipo==='completo'?'COMPLETO (puede tardar)' : 'CONFIG (rápido)')+'</div>';
+    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Token: '+(token?'presente':'FALTA')+'</div>';
+    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Iniciando backup en background...</div>';
+    
+    let resp;
+    try{
+      const startTime = Date.now();
+      resp=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
+      const elapsed = Date.now() - startTime;
+      document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Tiempo: '+elapsed+'ms, Status: '+resp.status+'</div>';
+    }catch(e){
+      document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] Fetch falló: '+e.name+' - '+e.message+'</div>';
+      throw e;
+    }
+    
+    if(!resp.ok){
+      const errData=await resp.json().catch(()=>({}));
+      document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] '+ (errData.error||'Error '+resp.status) +'</div>';
+      throw new Error(errData.error||'Error generando');
+    }
+    
+    const data=await resp.json();
+    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Job ID: '+data.jobId+'</div>';
+    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Esperando resultado...</div>';
+    
+    if(cancelled)return;
+    
+    // Polling para progreso y resultado
+    pollInterval=setInterval(async()=>{
+      try{
+        // Progreso
+        const p=await fetch('/api/backup/progreso',{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json());
+        if(p.stage && p.stage!=='done'){
+          const pct=Math.round((p.current/p.total)*100)||0;
+          document.getElementById('backup-progress-bar').style.width=pct+'%';
+          document.getElementById('backup-progress-msg').textContent=p.message||'Procesando...';
+          const term=document.getElementById('backup-terminal');
+          if(term && p.message){
+            term.innerHTML+=`<div>→ ${p.message}</div>`;
+            term.scrollTop=term.scrollHeight;
+          }
+        }
+        
+        // Estado del job
+        const status=await fetch('/api/backup?action=status',{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json());
+        document.getElementById('backup-terminal').innerHTML+='<div>[JOB] Estado: '+status.status+'</div>';
+        
+        if(status.status==='done'){
+          clearInterval(pollInterval);
+          document.getElementById('backup-terminal').innerHTML+='<div style="color:#00ff00">[OK] Backup completado: '+status.filename+'</div>';
+          document.getElementById('backup-progress-bar').style.width='100%';
+          document.getElementById('backup-progress-msg').textContent='Completado! Descargando...';
+          
+          // Descargar
+          setTimeout(async(){
+            document.getElementById('backup-terminal').innerHTML+='<div>[DESCARGANDO] Descargando archivo...</div>';
+            try{
+              const dlUrl='/api/backup?action=download&filename='+encodeURIComponent(status.filename);
+              const dlResp=await fetch(dlUrl,{headers:{Authorization:`Bearer ${token}`}});
+              if(!dlResp.ok)throw new Error('Error descargando');
+              
+              const blob=await dlResp.blob();
+              const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=status.filename;a.click();
+              URL.revokeObjectURL(a.href);
+              
+              document.getElementById('backup-terminal').innerHTML+='<div style="color:#00ff00">[OK] Descarga completada!</div>';
+              setTimeout(function(){
+                closeM();
+                toast('Backup descargado','success');
+                cargarListaBackups();
+              },1000);
+            }catch(e){
+              document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[X] Error: '+e.message+'</div>';
+              closeM();
+              toast(e.message,'error');
+            }
+            btn.disabled=false;btn.textContent=label;
+          },1000);
+        }
+        else if(status.status==='error'){
+          clearInterval(pollInterval);
+          document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] '+status.error+'</div>';
+          btn.disabled=false;btn.textContent=label;
+        }
+      }catch(_){}
+    },1000);
+    
+  }catch(e){
+    if(cancelled)return;
+    document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] '+e.message+'</div>';
+    document.getElementById('backup-progress-msg').textContent='Error: '+e.message;
+    document.getElementById('backup-progress-msg').style.color='var(--danger)';
+    btn.disabled=false;btn.textContent=label;
+    btn.onclick=function(){closeM()};
+    btn.textContent='Cerrar';
+  }
+}
   
   btn.textContent='Generando...';
   const progresoEl=document.getElementById('mroot');

@@ -25,10 +25,97 @@ console.log('[Backup] Directorio de backups:', BACKUP_DIR);
 
 // Progress para SSE
 let backupProgress = { total: 0, current: 0, message: '', stage: '' };
+let backupJob = null; // { id, tipo, status, filename, error }
 
-function ensureBackupDir() {
-  if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
-}
+// GET /api/backup — dos pasos: generar y luego descargar
+// Paso 1: /api/backup?action=generate&tipo=config|completo -> devuelve filename (async)
+// Paso 2: /api/backup?action=download&filename=xxx -> descarga el archivo
+router.get('/', soloAdmin, async (req, res) => {
+  const action = req.query.action;
+  const timestamp = Date.now();
+
+  try {
+    // Endpoint de estado del job
+    if (action === 'status') {
+      if (backupJob) {
+        return res.json({ 
+          status: backupJob.status, 
+          filename: backupJob.filename, 
+          error: backupJob.error,
+          progress: backupJob.status === 'running' ? backupProgress : null
+        });
+      }
+      return res.json({ status: 'idle' });
+    }
+
+    // Paso 2: Descargar archivo existente
+    if (action === 'download') {
+      const filename = req.query.filename;
+      if (!filename || !/^vitamar_backup_[\w\-]+\.zip$/.test(filename)) {
+        return res.status(400).json({ error: 'Nombre de archivo inválido' });
+      }
+      const filepath = path.join(BACKUP_DIR, filename);
+      if (!fs.existsSync(filepath)) {
+        return res.status(404).json({ error: 'Archivo no encontrado' });
+      }
+      return res.download(filepath, filename);
+    }
+
+    // Paso 1: Generar nuevo backup - iniciar en background
+    const tipo = req.query.tipo === 'config' ? 'config' : 'completo';
+    
+    // Si ya hay un job corriendo, devolver error
+    if (backupJob && backupJob.status === 'running') {
+      return res.status(409).json({ error: 'Ya hay un backup en progreso' });
+    }
+    
+    // Crear job
+    const jobId = 'backup_' + timestamp;
+    backupJob = { id: jobId, tipo, status: 'running', filename: null, error: null };
+    
+    // Responder inmediatamente
+    res.json({ ok: true, jobId, message: 'Backup iniciado en background' });
+    
+    // Ejecutar en background
+    (async () => {
+      try {
+        console.log('[Backup] Generando backup tipo:', tipo);
+        backupProgress = { total: 100, current: 10, message: 'Generando...', stage: 'generando' };
+        
+        const zip = await generarZip(tipo);
+        
+        const fecha = new Date().toISOString().slice(0, 10);
+        const filename = tipo === 'config' 
+          ? `vitamar_backup_config_${fecha}_${timestamp}.zip`
+          : `vitamar_backup_${fecha}_${timestamp}.zip`;
+
+        console.log('[Backup] Guardando:', filename);
+        
+        const filepath = path.join(BACKUP_DIR, filename);
+        zip.writeZip(filepath);
+        
+        const size = fs.statSync(filepath).size;
+        console.log('[Backup] Guardado, size:', size);
+        
+        backupJob.status = 'done';
+        backupJob.filename = filename;
+        backupJob.size = size;
+        backupProgress = { total: 0, current: 0, message: '', stage: '' };
+        
+      } catch (err) {
+        console.error('[Backup] Error:', err.message);
+        backupJob.status = 'error';
+        backupJob.error = err.message;
+        backupProgress = { total: 0, current: 0, message: '', stage: '' };
+      }
+    })();
+    
+  } catch (err) {
+    console.error('[Backup] Error:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Error generando backup: ' + err.message });
+    }
+  }
 
 function getBackupFiles() {
   ensureBackupDir();
