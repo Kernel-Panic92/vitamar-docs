@@ -64,27 +64,25 @@ router.put('/:id', requireRol('admin'), async (req, res) => {
   const { nombre, email, rol, area_id, activo, password } = req.body;
   
   try {
-    let setClauses = ['nombre = $1', 'rol = $2', 'activo = $3'];
     let params = [nombre?.trim(), rol, activo === true];
+    let query = `UPDATE usuarios SET nombre = $1, rol = $2, activo = $3`;
     
     if (area_id && area_id !== '') {
-      setClauses.push('area_id = $4');
       params.push(area_id);
+      query += `, area_id = $${params.length}`;
     }
     
     if (password && password.trim()) {
       if (password.length < 8) {
         return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
       }
-      const paramIndex = setClauses.length + 1;
-      setClauses.push(`password_hash = $${paramIndex}`);
-      params.push(await bcrypt.hash(password, 12));
+      const hash = await bcrypt.hash(password, 12);
+      params.push(hash);
+      query += `, password_hash = $${params.length}`;
     }
     
-    const paramIndex = setClauses.length + 1;
-    setClauses.push(`actualizado_en = NOW()`);
-    const query = `UPDATE usuarios SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING id, nombre, email, rol, area_id, activo`;
     params.push(req.params.id);
+    query += `, actualizado_en = NOW() WHERE id = $${params.length}::uuid RETURNING id, nombre, email, rol, area_id, activo`;
     
     const { rows } = await db.query(query, params);
     if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
