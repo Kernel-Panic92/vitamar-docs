@@ -1501,8 +1501,9 @@ async function renderCfgTab(cfg){
           <div id="update-available" style="display:none;padding:16px;background:rgba(79,190,150,.1);border:1px solid rgba(79,190,150,.3);border-radius:10px;margin-bottom:12px">
             <div style="font-weight:600;color:var(--success);margin-bottom:8px">🎉 Nueva versión disponible</div>
             <div id="update-changes" style="font-size:13px;color:var(--text);margin-bottom:12px"></div>
-            <div style="display:flex;gap:10px">
-              <button class="btn btn-primary" onclick="ejecutarActualizacion()" id="btn-update-now">🚀 Actualizar ahora</button>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+              <button class="btn btn-primary" onclick="ejecutarActualizacion('main')" id="btn-update-now">🚀 Actualizar desde main</button>
+              <button class="btn btn-secondary" onclick="ejecutarActualizacion('release')">🏷️ Actualizar desde release</button>
             </div>
           </div>
           
@@ -1880,13 +1881,13 @@ async function checkUpdates(){
   }
 }
 
-async function ejecutarActualizacion(){
-  if(!confirm('¿Actualizar el sistema? El servicio se reiniciará automáticamente.'))return;
+async function ejecutarActualizacion(branch='main'){
+  if(!confirm('¿Actualizar el sistema desde '+branch+'? El servicio se reiniciará automáticamente.'))return;
   const btn=$('btn-update-now');
   btn.disabled=true;
   btn.textContent='Actualizando...';
   try{
-    const r=await api('POST','/configuracion/updater/update');
+    const r=await api('POST','/configuracion/updater/update',{branch});
     if(r.ok){
       toast('Actualización iniciada. El sistema se reiniciará.','success');
       $('update-available').style.display='none';

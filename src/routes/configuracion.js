@@ -332,16 +332,26 @@ router.post('/updater/check', requireRol('admin'), async (req, res) => {
 });
 
 router.post('/updater/update', requireRol('admin'), async (req, res) => {
+  const branch = req.body?.branch || 'main';
+  
   try {
     logUpdater('========================================');
-    logUpdater('INICIANDO ACTUALIZACION');
+    logUpdater('INICIANDO ACTUALIZACION (rama: ' + branch + ')');
     logUpdater('========================================');
     
     logUpdater('1. Guardando cambios locales...');
     execSync('git add -A && git stash 2>/dev/null || true', { cwd: APP_DIR, stdio: 'pipe' });
     
-    logUpdater('2. Pulling latest changes...');
-    execSync('git pull origin main 2>/dev/null || git pull origin master 2>/dev/null', { cwd: APP_DIR, stdio: 'pipe' });
+    logUpdater('2. Pulling latest changes from ' + branch + '...');
+    if (branch === 'release') {
+      execSync('git fetch origin release && git checkout release && git pull origin release', { cwd: APP_DIR, stdio: 'pipe' });
+      logUpdater('2b. Rama release - sin cambios locales');
+    } else {
+      execSync('git pull origin ' + branch + ' 2>/dev/null || git pull origin main 2>/dev/null', { cwd: APP_DIR, stdio: 'pipe' });
+      
+      logUpdater('5. Restaurando cambios locales...');
+      execSync('git stash pop 2>/dev/null || true', { cwd: APP_DIR, stdio: 'pipe' });
+    }
     
     logUpdater('3. Instalando dependencias...');
     try {
