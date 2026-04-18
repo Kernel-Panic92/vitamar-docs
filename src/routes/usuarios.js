@@ -68,8 +68,8 @@ router.put('/:id', requireRol('admin'), async (req, res) => {
     const areaIdValue = (area_id === '' || !area_id) ? null : area_id;
     
     // Construir query dinámicamente
-    const updates = ['nombre=$1', 'rol=$2', 'activo=$3'];
-    const values = [nombre?.trim(), rol, activo !== false];
+    const updates = ['nombre=$1', 'rol=$2', 'activo=CAST($3 AS boolean)'];
+    const values = [nombre?.trim(), rol, activo === true ? 'true' : 'false'];
     
     // Agregar area_id como texto (PostgreSQL lo maneja mejor así)
     if (areaIdValue) {
