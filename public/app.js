@@ -1031,12 +1031,15 @@ async function descargarBackup(tipo='completo'){
   try{
     // Paso 1: Generar backup
     const url=tipo==='config'?'/api/backup?action=generate&tipo=config':'/api/backup?action=generate&tipo=completo';
-    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Generando backup...</div>';
+    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] URL: '+url+'</div>';
+    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Token: '+(token?'presente':'FALTA')+'</div>';
     let resp;
     try{
+      const startTime = Date.now();
       resp=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
+      document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Response en '+(Date.now()-startTime)+'ms, status: '+resp.status+'</div>';
     }catch(e){
-      document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] No se pudo conectar: '+e.message+'</div>';
+      document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] Fetch falló: '+e.name+' - '+e.message+'</div>';
       throw e;
     }
     
