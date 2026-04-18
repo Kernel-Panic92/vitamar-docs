@@ -698,12 +698,13 @@ router.put('/cron', requireRol('admin'), async (req, res) => {
   const { cron_imap, cron_escalaciones, cron_dian, cron_notificaciones } = req.body;
   
   try {
-    const tempFile = path.join(APP_DIR, 'temp_cron.txt');
+    const SCRIPT_DIR = '/root/vitamar-docs/scripts';
+    const APP_DIR_PATH = '/root/vitamar-docs';
     
-    const imapCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/imap.service\').pollCorreo()" >> /root/vitamar-docs/logs/imap.log 2>&1';
-    const escCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/cron.service\').ejecutarEscalaciones()" >> /root/vitamar-docs/logs/cron.log 2>&1';
-    const dianCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/cron.service\').verificarDianTacita()" >> /root/vitamar-docs/logs/cron.log 2>&1';
-    const notifCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/cron.service\').enviarNotificaciones()" >> /root/vitamar-docs/logs/cron.log 2>&1';
+    const imapCmd = `${SCRIPT_DIR}/cron-imap.sh`;
+    const escCmd = `${SCRIPT_DIR}/cron-escalaciones.sh`;
+    const dianCmd = `${SCRIPT_DIR}/cron-dian.sh`;
+    const notifCmd = `${SCRIPT_DIR}/cron-notificaciones.sh`;
     
     const lines = ['# Vitamar Docs - Tareas programadas'];
     
@@ -714,11 +715,9 @@ router.put('/cron', requireRol('admin'), async (req, res) => {
     
     const newCrontab = lines.join('\n') + '\n';
     
-    // Debug: mostrar lo que se va a escribir
     console.log('[CRON] New crontab:', newCrontab);
     
-    // Escribir a archivo temporal para evitar problemas de escaping
-    const cronFile = '/root/vitamar-docs/temp_cron.txt';
+    const cronFile = path.join(APP_DIR_PATH, 'temp_cron.txt');
     fs.writeFileSync(cronFile, newCrontab);
     console.log('[CRON] File written, running crontab command');
     
