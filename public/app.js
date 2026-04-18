@@ -1041,7 +1041,7 @@ async function descargarBackup(tipo='completo'){
   
   try{
     // Paso 1: Generar backup
-    const url=tipo==='config'?'/api/backup?action=generate&tipo=config':'/api/backup?action=generate&tipo=completo';
+    const url=tipo==='config'?'/api/backup?action=generate&tipo=config&_='+Date.now():'/api/backup?action=generate&tipo=completo&_='+Date.now();
     document.getElementById('backup-terminal').innerHTML+='<div>[INFO] URL: '+url+'</div>';
     document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Tipo: '+(tipo==='completo'?'COMPLETO (puede tardar)' : 'CONFIG (rápido)')+'</div>';
     document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Token: '+(token?'presente':'FALTA')+'</div>';
