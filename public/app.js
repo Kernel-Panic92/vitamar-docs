@@ -11,7 +11,7 @@ const COLS=['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#F97316','#06B6D4
 const PASOS=[{id:'recepcion',l:'Recepción',d:'Sistema recibe'},{id:'revision',l:'Revisión',d:'Asigna CC'},{id:'aprobacion',l:'Aprobación',d:'Responsable'},{id:'causacion',l:'Causación',d:'Tesorería'},{id:'pagada',l:'Pagada',d:'Archivada'}];
 const EORD=['recibida','revision','aprobada','causada','pagada'];
 const EM={recibida:{l:'Recibida',c:'#60A5FA'},revision:{l:'En revisión',c:'#FBBF24'},aprobada:{l:'Aprobada',c:'#34D399'},causada:{l:'Causada',c:'#A78BFA'},rechazada:{l:'Rechazada',c:'#F87171'},pagada:{l:'Pagada',c:'#6EE7B7'}};
-const NAV=[{id:'dashboard',l:'Dashboard',i:'📊',s:'p'},{id:'facturas',l:'Facturas',i:'📄',s:'p',badge:'f'},{id:'pendientes',l:'Pendientes',i:'⏳',s:'f',badge:'p',w:true},{id:'aprobaciones',l:'Aprobaciones',i:'✓',s:'f'},{id:'causacion',l:'Causación',i:'📥',s:'f'},{id:'categorias',l:'Categorías',i:'🏷️',s:'c'},{id:'areas',l:'Áreas',i:'🏢',s:'c'},{id:'centros',l:'Centros',i:'🗺️',s:'c'},{id:'configuracion',l:'Configuración',i:'⚙️',s:'c',admin:true},{id:'backup',l:'Backup',i:'💾',s:'c',admin:true},{id:'usuarios',l:'Usuarios',i:'👤',s:'c',admin:true},{id:'audit',l:'Auditoría',i:'🔒',s:'c',roles:['admin','auditor']}];
+const NAV=[{id:'dashboard',l:'Dashboard',i:'📊',s:'p'},{id:'facturas',l:'Facturas',i:'📄',s:'p'},{id:'pendientes',l:'Pendientes',i:'⏳',s:'f',w:true},{id:'aprobaciones',l:'Aprobaciones',i:'✓',s:'f'},{id:'causacion',l:'Causación',i:'📥',s:'f'},{id:'categorias',l:'Categorías',i:'🏷️',s:'c'},{id:'areas',l:'Áreas',i:'🏢',s:'c'},{id:'centros',l:'Centros',i:'🗺️',s:'c'},{id:'configuracion',l:'Configuración',i:'⚙️',s:'c',admin:true},{id:'backup',l:'Backup',i:'💾',s:'c',admin:true},{id:'usuarios',l:'Usuarios',i:'👤',s:'c',admin:true},{id:'audit',l:'Auditoría',i:'🔒',s:'c',roles:['admin','auditor']}];
 const SECS=[{id:'p',l:'Principal'},{id:'f',l:'Flujo'},{id:'c',l:'Config'}];
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -62,11 +62,8 @@ async function api(m,p,b,isF){
   const o={method:m,headers:{Authorization:`Bearer ${S.token}`}};
   if(b&&!isF){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b)}
   else if(isF)o.body=b;
-  console.log('[API]', m, p, 'token:', S.token ? 'yes' : 'no');
   const r=await fetch(`/api${p}`,o);
-  console.log('[API] response:', r.status, r.statusText);
   const j=await r.json().catch(()=>({}));
-  console.log('[API] json:', j);
   if(!r.ok)throw new Error(j.error||`HTTP ${r.status}`);
   return j;
 }
@@ -207,21 +204,7 @@ async function goTo(v){
   }catch(ex){el.innerHTML=`<div class="empty" style="color:var(--danger)">${ex.message}</div>`}
 }
 async function refreshBadges(){
-  console.log('[refreshBadges] called');
-  try{
-    const stats=await api('GET','/facturas/badge-stats');
-    console.log('[refreshBadges] stats:', stats);
-    const nb=$('nb-f');const np=$('nb-p');
-    if(nb)nb.textContent=stats.total||0;
-    if(np){
-      const urgentes=stats.pendientes_urgentes||0;
-      np.textContent=urgentes||'';
-      np.style.background=urgentes?'var(--danger)':'rgba(251,191,36,.15)';
-      np.style.color=urgentes?'#fff':'var(--warning)';
-    }
-  }catch(e){
-    console.log('[refreshBadges] error:', e.message);
-  }
+  // Badges removed from menu - badges only shown when opening modals
 }
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
