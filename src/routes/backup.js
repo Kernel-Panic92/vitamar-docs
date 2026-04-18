@@ -87,61 +87,12 @@ async function generarZip(tipo = 'completo') {
     eventos:   eventos.length
   };
 
+  console.log('[Backup] Generando backup:', { tipo, config: cfg.length, usuarios: usuarios.length, facturas: facturas.length });
+
   zip.addFile('backup.json', Buffer.from(JSON.stringify(data, null, 2), 'utf8'));
 
   // Solo agregar uploads si es backup completo
   if (tipo === 'completo' && fs.existsSync(UPLOAD_DIR)) {
-    const files = fs.readdirSync(UPLOAD_DIR);
-    if (files.length > 0) {
-      zip.addLocalFolder(UPLOAD_DIR, 'uploads');
-    }
-  }
-
-  return zip;
-}
-  };
-
-  const cfg = await query('SELECT clave, valor FROM configuracion');
-  const usuarios = await query('SELECT id, nombre, email, rol, area_id, activo, cambio_password, creado_en FROM usuarios');
-  const areas = await query('SELECT * FROM areas');
-  const cats = await query('SELECT * FROM categorias_compra');
-  const centros = await query('SELECT * FROM centros_operacion');
-  const facturas = await query(`
-    SELECT f.*, p.nombre AS proveedor_nombre, p.nit AS proveedor_nit,
-           c.nombre AS categoria_nombre, c.color AS categoria_color
-    FROM facturas f
-    LEFT JOIN proveedores p ON p.id = f.proveedor_id
-    LEFT JOIN categorias_compra c ON c.id = f.categoria_id
-    ORDER BY f.recibida_en DESC LIMIT 1000
-  `);
-  const eventos = await query('SELECT * FROM eventos_flujo ORDER BY creado_en DESC LIMIT 5000');
-
-  const data = {
-    app:       'VitamarDocs',
-    version:   '1.0',
-    generado:  new Date().toISOString(),
-    config:    cfg,
-    usuarios:  usuarios.map(u => ({ ...u, password_hash: '(backup_excluded)' })),
-    areas:     areas,
-    categorias: cats,
-    centros:   centros,
-    facturas:  facturas,
-    eventos:   eventos,
-  };
-
-  console.log('[Backup] Generando backup con:', {
-    config: cfg.length,
-    usuarios: usuarios.length,
-    areas: areas.length,
-    categorias: cats.length,
-    centros: centros.length,
-    facturas: facturas.length,
-    eventos: eventos.length
-  });
-
-  zip.addFile('backup.json', Buffer.from(JSON.stringify(data, null, 2), 'utf8'));
-
-  if (fs.existsSync(UPLOAD_DIR)) {
     const files = fs.readdirSync(UPLOAD_DIR);
     if (files.length > 0) {
       zip.addLocalFolder(UPLOAD_DIR, 'uploads');
