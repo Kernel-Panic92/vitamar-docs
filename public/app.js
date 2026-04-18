@@ -1037,7 +1037,8 @@ async function descargarBackup(tipo='completo'){
     try{
       const startTime = Date.now();
       resp=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
-      document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Response en '+(Date.now()-startTime)+'ms, status: '+resp.status+'</div>';
+      const elapsed = Date.now() - startTime;
+      document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Tiempo: '+elapsed+'ms, Status: '+resp.status+'</div>';
     }catch(e){
       document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] Fetch falló: '+e.name+' - '+e.message+'</div>';
       throw e;
