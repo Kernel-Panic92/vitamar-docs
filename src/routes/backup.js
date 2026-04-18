@@ -108,7 +108,6 @@ router.get('/', soloAdmin, async (req, res) => {
   try {
     const tipo = req.query.tipo === 'config' ? 'config' : 'completo';
     const zip = await generarZip(tipo);
-    const buffer = zip.toBuffer();
     const fecha = new Date().toISOString().slice(0, 10);
     const filename = tipo === 'config' 
       ? `vitamar_backup_config_${fecha}.zip`
@@ -116,7 +115,9 @@ router.get('/', soloAdmin, async (req, res) => {
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', buffer.length);
+    
+    // Usar stream para archivos grandes
+    const buffer = zip.toBuffer();
     res.end(buffer);
   } catch (err) {
     console.error('[Backup] Error:', err);

@@ -942,7 +942,10 @@ async function rBackup(){
         <div style="margin-bottom:20px;">
           <div style="font-size:13px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
             <span>📁 Backups en el Servidor</span>
-            <button class="btn btn-secondary btn-sm" onclick="cargarListaBackups()">🔄 Actualizar</button>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-primary btn-sm" onclick="generarBackupServidor()">➕ Generar</button>
+              <button class="btn btn-secondary btn-sm" onclick="cargarListaBackups()">🔄 Actualizar</button>
+            </div>
           </div>
           <div id="lista-backups-loading" style="text-align:center;padding:16px;color:var(--muted);font-size:13px;">Cargando...</div>
           <div id="lista-backups-none" style="display:none;text-align:center;padding:16px;color:var(--muted);font-size:12px;background:var(--surface2);border-radius:9px;">🕐 No hay backups disponibles</div>
@@ -1356,7 +1359,6 @@ async function renderCfgTab(cfg){
         </div>
         <div style="display:flex;gap:10px;margin-top:20px">
           <button class="btn btn-primary" onclick="guardarCfg('backups')">💾 Guardar</button>
-          <button class="btn btn-secondary" onclick="ejecutarBackupAhora()">⚡ Backup ahora</button>
         </div>
       </div>
 
@@ -1525,6 +1527,17 @@ async function ejecutarBackupAhora(){
       toast(r.message||'Backup completado','success');
     }
   }catch(e){toast(e.message,'error')}
+}
+
+async function generarBackupServidor(){
+  const btn=event.target;
+  btn.disabled=true;btn.textContent='Generando...';
+  try{
+    const r=await api('POST','/configuracion/backups-auto/now');
+    toast(r.path?'Backup creado en servidor':'Backup generado','success');
+    cargarListaBackups();
+  }catch(e){toast(e.message,'error')}
+  btn.disabled=false;btn.textContent='➕ Generar';
 }
 
 async function verCronLogs(){
