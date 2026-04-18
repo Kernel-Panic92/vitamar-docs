@@ -1028,8 +1028,7 @@ async function descargarBackup(tipo='completo'){
       <div id="backup-terminal" style="background:#1a1a1a;color:#00ff00;font-family:monospace;font-size:11px;padding:12px;border-radius:6px;height:120px;overflow-y:auto;line-height:1.6;margin-bottom:16px">
         <div style="opacity:0.7">[...] Iniciando backup...</div>
       </div>
-      <div style="display:flex;justify-content:space-between">
-        <button class="btn btn-secondary" onclick="window.testBackupConn()">🔌 Test conexión</button>
+      <div style="display:flex;justify-content:center">
         <button class="btn btn-secondary" onclick="window.cancelarBackupGen()">Cancelar</button>
       </div>
     </div>
@@ -1039,25 +1038,6 @@ async function descargarBackup(tipo='completo'){
   let pollInterval=null;
   
   window.cancelarBackupGen=function(){cancelled=true;if(pollInterval)clearInterval(pollInterval);closeM();btn.disabled=false;btn.textContent=label};
-  
-  window.testBackupConn=async function(){
-    const term=document.getElementById('backup-terminal');
-    term.innerHTML+='<div>[TEST] Probando /api/health...</div>';
-    try{
-      const resp=await fetch('/api/health',{headers:{Authorization:`Bearer ${token}`}});
-      term.innerHTML+='<div>[TEST] Health: '+resp.status+' OK</div>';
-      
-      term.innerHTML+='<div>[TEST] Probando /api/backup?action=generate&tipo=config...</div>';
-      const startTime=Date.now();
-      const genResp=await fetch('/api/backup?action=generate&tipo=config',{headers:{Authorization:`Bearer ${token}`}});
-      const elapsed=Date.now()-startTime;
-      term.innerHTML+='<div>[TEST] Generate: '+genResp.status+' ('+elapsed+'ms)</div>';
-      
-      term.innerHTML+='<div style="color:#00ff00">[TEST] ✓ Todo OK</div>';
-    }catch(e){
-      term.innerHTML+='<div style="color:red">[TEST] ✗ Error: '+e.message+'</div>';
-    }
-  };
   
   try{
     // Paso 1: Generar backup
