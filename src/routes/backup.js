@@ -165,30 +165,37 @@ router.get('/', soloAdmin, async (req, res) => {
     // Write directly to response
     const tempFile = path.join(BACKUP_DIR, `temp_${timestamp}.zip`);
     
-    // Ensure backup dir exists
+    // Write to temp file
     if (!fs.existsSync(BACKUP_DIR)) {
       fs.mkdirSync(BACKUP_DIR, { recursive: true });
     }
     
     zip.writeZip(tempFile);
     
-    const readStream = fs.createReadStream(tempFile);
-    
-    readStream.on('end', () => {
-      try { fs.unlinkSync(tempFile); } catch(e) {}
-    });
-    
-    readStream.on('error', (err) => {
-      console.error('[Backup] Stream error:', err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Error enviando backup' });
+    // Use res.sendFile for better handling
+    res.sendFile(tempFile, { 
+      dotfiles: 'allow',
+      maxAge: 0,
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="${filename}"`
       }
+    }, (err) => {
+      if (err) {
+        console.error('[Backup] SendFile error:', err.message);
+      }
+      // Clean up after send
+      try { fs.unlinkSync(tempFile); } catch(e) {}
+      backupProgress = { total: 0, current: 0, message: '', stage: '' };
     });
-    
-    readStream.pipe(res);
   } catch (err) {
     clearTimeout(timeout);
-    console.error('[Backup] Error:', err);
+    console.error('[Backup] Error:', err.message);
+    // Clean up temp file on error
+    try {
+      const tempFile = path.join(BACKUP_DIR, `temp_${timestamp}.zip`);
+      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+    } catch(e) {}
     if (!res.headersSent) {
       res.status(500).json({ error: 'Error generando backup: ' + err.message });
     }
