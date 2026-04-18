@@ -698,6 +698,8 @@ router.put('/cron', requireRol('admin'), async (req, res) => {
   const { cron_imap, cron_escalaciones, cron_dian, cron_notificaciones } = req.body;
   
   try {
+    const tempFile = path.join(APP_DIR, 'temp_cron.txt');
+    
     const imapCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/imap.service\').pollCorreo()" >> /root/vitamar-docs/logs/imap.log 2>&1';
     const escCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/cron.service\').ejecutarEscalaciones()" >> /root/vitamar-docs/logs/cron.log 2>&1';
     const dianCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/cron.service\').verificarDianTacita()" >> /root/vitamar-docs/logs/cron.log 2>&1';
@@ -711,7 +713,11 @@ router.put('/cron', requireRol('admin'), async (req, res) => {
     if (cron_notificaciones) lines.push(`${cron_notificaciones} ${notifCmd}`);
     
     const newCrontab = lines.join('\n') + '\n';
-    execSync(`echo "${newCrontab}" | crontab -`, { stdio: 'pipe' });
+    
+    // Escribir a archivo temporal para evitar problemas de escaping
+    fs.writeFileSync(tempFile, newCrontab);
+    execSync(`crontab ${tempFile}`, { stdio: 'pipe' });
+    fs.unlinkSync(tempFile);
     
     await db.query(
       `INSERT INTO configuracion (clave, valor, actualizado_en) VALUES 
@@ -720,7 +726,7 @@ router.put('/cron', requireRol('admin'), async (req, res) => {
        ON CONFLICT (clave) DO UPDATE SET valor=EXCLUDED.valor, actualizado_en=NOW()`,
       [cron_imap || '', cron_escalaciones || '', cron_dian || '', cron_notificaciones || '']
     );
-    
+
     res.json({ ok: true, message: 'Tareas CRON actualizadas' });
   } catch (err) {
     res.status(500).json({ error: err.message });
