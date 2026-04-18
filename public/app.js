@@ -1001,9 +1001,20 @@ function handleRestoreDrop(e){
 async function descargarBackup(tipo='completo'){
   const btn=tipo==='config'?document.getElementById('btn-descargar-backup-config'):document.getElementById('btn-descargar-backup');
   const label=tipo==='config'?'⚙️ Solo Config':'💾 Completo';
-  btn.disabled=true;btn.textContent='Generando...';
+  btn.disabled=true;btn.textContent='Verificando...';
   
   const token=localStorage.getItem('vd_t');
+  
+  // Verificar conexión primero
+  try{
+    await fetch('/api/backup/lista',{headers:{Authorization:`Bearer ${token}`}});
+  }catch(e){
+    btn.disabled=false;btn.textContent=label;
+    toast('Sin conexión al servidor','error');
+    return;
+  }
+  
+  btn.textContent='Generando...';
   const progresoEl=document.getElementById('mroot');
   progresoEl.innerHTML=`<div class="modal-overlay open">
     <div class="modal" style="max-width:520px">
@@ -1052,6 +1063,7 @@ async function descargarBackup(tipo='completo'){
     // Paso 1: Generar backup
     const url=tipo==='config'?'/api/backup?action=generate&tipo=config':'/api/backup?action=generate&tipo=completo';
     document.getElementById('backup-terminal').innerHTML+='<div>[INFO] URL: '+url+'</div>';
+    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Tipo: '+(tipo==='completo'?'COMPLETO (puede tardar)' : 'CONFIG (rápido)')+'</div>';
     document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Token: '+(token?'presente':'FALTA')+'</div>';
     let resp;
     try{
