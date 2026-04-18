@@ -62,8 +62,11 @@ async function api(m,p,b,isF){
   const o={method:m,headers:{Authorization:`Bearer ${S.token}`}};
   if(b&&!isF){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b)}
   else if(isF)o.body=b;
+  console.log('[API]', m, p, 'token:', S.token ? 'yes' : 'no');
   const r=await fetch(`/api${p}`,o);
+  console.log('[API] response:', r.status, r.statusText);
   const j=await r.json().catch(()=>({}));
+  console.log('[API] json:', j);
   if(!r.ok)throw new Error(j.error||`HTTP ${r.status}`);
   return j;
 }
@@ -204,8 +207,10 @@ async function goTo(v){
   }catch(ex){el.innerHTML=`<div class="empty" style="color:var(--danger)">${ex.message}</div>`}
 }
 async function refreshBadges(){
+  console.log('[refreshBadges] called');
   try{
     const stats=await api('GET','/facturas/badge-stats');
+    console.log('[refreshBadges] stats:', stats);
     const nb=$('nb-f');const np=$('nb-p');
     if(nb)nb.textContent=stats.total||0;
     if(np){
@@ -214,7 +219,9 @@ async function refreshBadges(){
       np.style.background=urgentes?'var(--danger)':'rgba(251,191,36,.15)';
       np.style.color=urgentes?'#fff':'var(--warning)';
     }
-  }catch(_){}
+  }catch(e){
+    console.log('[refreshBadges] error:', e.message);
+  }
 }
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
