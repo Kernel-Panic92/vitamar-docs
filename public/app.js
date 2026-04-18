@@ -1043,7 +1043,7 @@ async function descargarBackup(tipo='completo'){
     document.getElementById('backup-progress-msg').style.color='var(--success)';
     document.getElementById('backup-terminal').innerHTML+='<div style="color:#00ff00;margin-top:8px">✓ Backup completado</div>';
     
-// Paso 2: Descargar
+    // Paso 2: Descargar
     setTimeout(async(){
       document.getElementById('backup-terminal').innerHTML+='<div>↓ Descargando archivo...</div>';
       try{
