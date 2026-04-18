@@ -1015,24 +1015,82 @@ function handleRestoreDrop(e){
 async function descargarBackup(tipo='completo'){
   const btn=tipo==='config'?document.getElementById('btn-descargar-backup-config'):document.getElementById('btn-descargar-backup');
   const label=tipo==='config'?'⚙️ Solo Config':'💾 Completo';
-  btn.disabled=true;btn.textContent='Generando...';
+  btn.disabled=true;btn.textContent='Iniciando...';
+  
+  // Mostrar modal de progreso
+  const token=localStorage.getItem('vd_t');
+  const progresoEl=document.getElementById('mroot');
+  progresoEl.innerHTML=`<div class="modal-overlay open">
+    <div class="modal" style="max-width:420px">
+      <div style="font-family:var(--font-head);font-size:18px;font-weight:700;margin-bottom:16px">
+        ${tipo==='config'?'⚙️ Backup de Configuración':'💾 Backup Completo'}
+      </div>
+      <div id="backup-progress-container" style="margin-bottom:16px">
+        <div id="backup-progress-msg" style="font-size:13px;color:var(--muted);margin-bottom:8px">Iniciando...</div>
+        <div style="background:var(--surface2);border-radius:6px;height:8px;overflow:hidden">
+          <div id="backup-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width .3s"></div>
+        </div>
+      </div>
+      <div id="backup-progress-error" style="display:none;padding:12px;background:rgba(247,97,79,.1);border-radius:8px;font-size:13px;color:var(--danger)"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+        <button class="btn btn-secondary" id="backup-cancel-btn" onclick="cancelBackup()">Cancelar</button>
+        <button class="btn btn-primary" id="backup-close-btn" onclick="closeBackupProgress()" style="display:none">Cerrar</button>
+      </div>
+    </div>
+  </div>`;
+  
+  let progressInterval=null;
+  let cancelled=false;
+  
+  window.cancelBackup=function(){cancelled=true;closeM();btn.disabled=false;btn.textContent=label};
+  window.closeBackupProgress=function(){closeM();btn.disabled=false;btn.textContent=label};
+  
+  // Escuchar progreso via polling
+  let pollInterval=null;
   try{
-    const token=localStorage.getItem('vd_t');
+    pollInterval=setInterval(async()=>{
+      try{
+        const p=await fetch('/api/backup/progreso',{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json());
+        if(p.stage){
+          const pct=Math.round((p.current/p.total)*100)||0;
+          document.getElementById('backup-progress-bar').style.width=pct+'%';
+          document.getElementById('backup-progress-msg').textContent=p.message||'Procesando...';
+        }
+      }catch(_){}
+    },800);
+    
     const url=tipo==='config'?'/api/backup?tipo=config':'/api/backup';
     const resp=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
+    
+    clearInterval(pollInterval);
+    
+    if(cancelled)return;
+    
     if(!resp.ok){
       const j=await resp.json().catch(()=>({}));
       throw new Error(j.error||'Error');
     }
+    
     const blob=await resp.blob();
     const fecha=new Date().toISOString().slice(0,10);
-    const filename=tipo==='config'?`vitamar_backup_config_${fecha}.zip`:(`vitamar_backup_${fecha}.zip`);
+    const ts=Date.now();
+    const filename=tipo==='config'?`vitamar_backup_config_${fecha}_${ts}.zip`:`vitamar_backup_${fecha}_${ts}.zip`;
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
     URL.revokeObjectURL(a.href);
-    document.getElementById('backup-ok').style.display='block';
-    setTimeout(()=>{document.getElementById('backup-ok').style.display='none'},5000);
-  }catch(e){toast(e.message,'error')}
-  btn.disabled=false;btn.textContent=label;
+    
+    document.getElementById('backup-progress-bar').style.width='100%';
+    document.getElementById('backup-progress-msg').textContent='✓ Backup completado';
+    document.getElementById('backup-progress-msg').style.color='var(--success)';
+    document.getElementById('backup-cancel-btn').style.display='none';
+    document.getElementById('backup-close-btn').style.display='inline-flex';
+    toast('Backup descargado','success');
+  }catch(e){
+    if(cancelled)return;
+    document.getElementById('backup-progress-error').textContent=e.message;
+    document.getElementById('backup-progress-error').style.display='block';
+    document.getElementById('backup-cancel-btn').textContent='Cerrar';
+    document.getElementById('backup-cancel-btn').onclick=function(){closeM();btn.disabled=false;btn.textContent=label};
+  }
 }
 
 async function cargarListaBackups(){

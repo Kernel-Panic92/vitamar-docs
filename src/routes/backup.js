@@ -23,6 +23,9 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(APP_DIR, 'uploads');
 
 console.log('[Backup] Directorio de backups:', BACKUP_DIR);
 
+// Progress para SSE
+let backupProgress = { total: 0, current: 0, message: '', stage: '' };
+
 function ensureBackupDir() {
   if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
 }
@@ -58,11 +61,23 @@ async function generarZip(tipo = 'completo') {
     }
   };
 
+  backupProgress = { total: 10, current: 0, message: 'Iniciando...', stage: 'inicio' };
+
   const cfg = await query('SELECT clave, valor FROM configuracion');
+  backupProgress.current = 1; backupProgress.message = 'Configuración'; backupProgress.stage = 'config';
+  
   const usuarios = await query('SELECT id, nombre, email, rol, area_id, activo, cambio_password, creado_en FROM usuarios');
+  backupProgress.current = 2; backupProgress.message = 'Usuarios'; backupProgress.stage = 'usuarios';
+  
   const areas = await query('SELECT * FROM areas');
+  backupProgress.current = 3; backupProgress.message = 'Áreas'; backupProgress.stage = 'areas';
+  
   const cats = await query('SELECT * FROM categorias_compra');
+  backupProgress.current = 4; backupProgress.message = 'Categorías'; backupProgress.stage = 'categorias';
+  
   const centros = await query('SELECT * FROM centros_operacion');
+  backupProgress.current = 5; backupProgress.message = 'Centros'; backupProgress.stage = 'centros';
+  
   const facturas = await query(`
     SELECT f.*, p.nombre AS proveedor_nombre, p.nit AS proveedor_nit,
            c.nombre AS categoria_nombre, c.color AS categoria_color
@@ -71,7 +86,10 @@ async function generarZip(tipo = 'completo') {
     LEFT JOIN categorias_compra c ON c.id = f.categoria_id
     ORDER BY f.recibida_en DESC LIMIT 1000
   `);
+  backupProgress.current = 6; backupProgress.message = `Facturas (${facturas.length})`; backupProgress.stage = 'facturas';
+  
   const eventos = await query('SELECT * FROM eventos_flujo ORDER BY creado_en DESC LIMIT 5000');
+  backupProgress.current = 7; backupProgress.message = 'Eventos'; backupProgress.stage = 'eventos';
 
   const data = {
     app:       'VitamarDocs',
@@ -89,15 +107,22 @@ async function generarZip(tipo = 'completo') {
 
   console.log('[Backup] Generando backup:', { tipo, config: cfg.length, usuarios: usuarios.length, facturas: facturas.length });
 
+  backupProgress.current = 8; backupProgress.message = 'Creando ZIP'; backupProgress.stage = 'zip';
+
   zip.addFile('backup.json', Buffer.from(JSON.stringify(data, null, 2), 'utf8'));
 
   // Solo agregar uploads si es backup completo
   if (tipo === 'completo' && fs.existsSync(UPLOAD_DIR)) {
     const files = fs.readdirSync(UPLOAD_DIR);
+    backupProgress.total = 10 + files.length;
+    backupProgress.current = 9; backupProgress.message = `Procesando archivos (0/${files.length})`; backupProgress.stage = 'uploads';
+    
     if (files.length > 0) {
       zip.addLocalFolder(UPLOAD_DIR, 'uploads');
     }
   }
+  
+  backupProgress.current = backupProgress.total; backupProgress.message = 'Completado'; backupProgress.stage = 'done';
 
   return zip;
 }
@@ -105,24 +130,48 @@ async function generarZip(tipo = 'completo') {
 // GET /api/backup — genera y descarga ZIP inmediatamente
 // ?tipo=config (solo DB) | ?tipo=completo (DB + uploads)
 router.get('/', soloAdmin, async (req, res) => {
+  const timeout = setTimeout(() => {
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Timeout generando backup' });
+    }
+  }, 120000); // 2 min timeout
+
   try {
     const tipo = req.query.tipo === 'config' ? 'config' : 'completo';
+    console.log('[Backup] Generando backup tipo:', tipo);
+    
     const zip = await generarZip(tipo);
+    clearTimeout(timeout);
+    
     const fecha = new Date().toISOString().slice(0, 10);
+    const timestamp = Date.now();
     const filename = tipo === 'config' 
-      ? `vitamar_backup_config_${fecha}.zip`
-      : `vitamar_backup_${fecha}.zip`;
+      ? `vitamar_backup_config_${fecha}_${timestamp}.zip`
+      : `vitamar_backup_${fecha}_${timestamp}.zip`;
 
+    console.log('[Backup] Archivo:', filename);
+    
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     
-    // Usar stream para archivos grandes
+    res.on('close', () => {
+      backupProgress = { total: 0, current: 0, message: '', stage: '' };
+    });
+    
     const buffer = zip.toBuffer();
     res.end(buffer);
   } catch (err) {
+    clearTimeout(timeout);
     console.error('[Backup] Error:', err);
-    res.status(500).json({ error: 'Error generando backup: ' + err.message });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Error generando backup: ' + err.message });
+    }
   }
+});
+
+// GET /api/backup/progreso — polling para progreso
+router.get('/progreso', soloAdmin, (req, res) => {
+  res.json(backupProgress);
 });
 
 // GET /api/backup/lista — lista backups en el servidor

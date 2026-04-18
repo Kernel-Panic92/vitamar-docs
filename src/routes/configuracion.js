@@ -620,7 +620,8 @@ router.post('/backups-auto/now', requireRol('admin'), async (req, res) => {
     }
     
     const fecha = new Date().toISOString().slice(0, 10);
-    const filename = `vitamar_backup_${fecha}.zip`;
+    const timestamp = Date.now();
+    const filename = `vitamar_backup_${fecha}_${timestamp}.zip`;
     const backupPath = path.join(backupDir, filename);
     
     const db = require('../db');
