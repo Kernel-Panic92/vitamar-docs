@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const fs = require('fs');
 const db = require('../db');
 const { authMiddleware, requireRol } = require('../middleware/auth');
 
@@ -208,6 +209,8 @@ router.get('/usuario/:usuarioId', requireRol('admin'), async (req, res) => {
 // ─── PUT /api/categorias/usuario/:usuarioId ───────────────────────────────
 router.put('/usuario/:usuarioId', requireRol('admin'), async (req, res) => {
   const { categoria_ids } = req.body;
+  const debugLog = '/root/vitamar-docs/logs/debug.log';
+  fs.appendFileSync(debugLog, `PUT categorias/usuario/${req.params.usuarioId} body: ${JSON.stringify(req.body)}\n`);
   
   if (!Array.isArray(categoria_ids)) {
     return res.status(400).json({ error: 'categoria_ids debe ser un array' });
@@ -221,6 +224,7 @@ router.put('/usuario/:usuarioId', requireRol('admin'), async (req, res) => {
       'DELETE FROM categorias_usuario WHERE usuario_id = $1',
       [req.params.usuarioId]
     );
+    fs.appendFileSync(debugLog, `DELETE categorias_usuario done\n`);
 
     for (const catId of categoria_ids) {
       await client.query(
@@ -228,10 +232,12 @@ router.put('/usuario/:usuarioId', requireRol('admin'), async (req, res) => {
         [req.params.usuarioId, catId]
       );
     }
+    fs.appendFileSync(debugLog, `INSERT categorias_usuario done\n`);
 
     await client.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
+    fs.appendFileSync(debugLog, `ERROR categorias: ${err.message}\n`);
     await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
   } finally {
