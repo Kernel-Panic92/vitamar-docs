@@ -1017,7 +1017,8 @@ async function descargarBackup(tipo='completo'){
       <div id="backup-terminal" style="background:#1a1a1a;color:#00ff00;font-family:monospace;font-size:11px;padding:12px;border-radius:6px;height:120px;overflow-y:auto;line-height:1.6;margin-bottom:16px">
         <div style="opacity:0.7">[...] Iniciando backup...</div>
       </div>
-      <div style="display:flex;justify-content:center">
+      <div style="display:flex;justify-content:space-between">
+        <button class="btn btn-secondary" onclick="window.testBackupConn()">🔌 Test conexión</button>
         <button class="btn btn-secondary" onclick="window.cancelarBackupGen()">Cancelar</button>
       </div>
     </div>
@@ -1027,6 +1028,20 @@ async function descargarBackup(tipo='completo'){
   let pollInterval=null;
   
   window.cancelarBackupGen=function(){cancelled=true;if(pollInterval)clearInterval(pollInterval);closeM();btn.disabled=false;btn.textContent=label};
+  
+  window.testBackupConn=async function(){
+    const term=document.getElementById('backup-terminal');
+    term.innerHTML+='<div>[TEST] Probando conexión...</div>';
+    try{
+      const resp=await fetch('/api/health',{headers:{Authorization:`Bearer ${token}`}});
+      term.innerHTML+='<div>[TEST] Health: '+resp.status+' OK</div>';
+      const backupResp=await fetch('/api/backup/lista',{headers:{Authorization:`Bearer ${token}`}});
+      term.innerHTML+='<div>[TEST] Backup lista: '+backupResp.status+' OK</div>';
+      term.innerHTML+='<div style="color:#00ff00">[TEST] ✓ Conexión exitosa</div>';
+    }catch(e){
+      term.innerHTML+='<div style="color:red">[TEST] ✗ Error: '+e.message+'</div>';
+    }
+  };
   
   try{
     // Paso 1: Generar backup
