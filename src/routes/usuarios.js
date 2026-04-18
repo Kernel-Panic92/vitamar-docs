@@ -65,7 +65,7 @@ router.put('/:id', requireRol('admin'), async (req, res) => {
   
   try {
     // Normalizar area_id - si es string vacío, convertir a null
-    const areaIdValue = (area_id === '' || !area_id) ? null : area_id;
+    const areaIdValue = (area_id === '' || area_id === null || !area_id) ? null : String(area_id);
     
     // Construir query dinámicamente
     const updates = ['nombre=$1', 'rol=$2', 'activo=CAST($3 AS boolean)'];
@@ -85,7 +85,7 @@ router.put('/:id', requireRol('admin'), async (req, res) => {
       }
       const hash = await bcrypt.hash(password, 12);
       updates.push(`password_hash=$${updates.length + 1}`);
-      values.push(hash);
+      values.push(String(hash));
     }
     
     values.push(req.params.id);
