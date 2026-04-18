@@ -1031,15 +1031,26 @@ async function descargarBackup(tipo='completo'){
   try{
     // Paso 1: Generar backup
     const url=tipo==='config'?'/api/backup?action=generate&tipo=config':'/api/backup?action=generate&tipo=completo';
-    const resp=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
+    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Generando backup...</div>';
+    let resp;
+    try{
+      resp=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
+    }catch(e){
+      document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] No se pudo conectar: '+e.message+'</div>';
+      throw e;
+    }
     
-    if(!resp.ok){throw new Error((await resp.json().catch(()=>({}))).error||'Error generando')}
+    if(!resp.ok){
+      const errData=await resp.json().catch(()=>({}));
+      document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] '+ (errData.error||'Error '+resp.status) +'</div>';
+      throw new Error(errData.error||'Error generando');
+    }
     
     const data=await resp.json();
     if(cancelled)return;
     
     document.getElementById('backup-progress-bar').style.width='100%';
-    document.getElementById('backup-progress-msg').textContent='¡Completado! Descargando...';
+    document.getElementById('backup-progress-msg').textContent='Completado! Descargando...';
     document.getElementById('backup-progress-msg').style.color='var(--success)';
     document.getElementById('backup-terminal').innerHTML+='<div style="color:#00ff00;margin-top:8px">[OK] Backup completado</div>';
     
@@ -1091,6 +1102,7 @@ async function descargarBackup(tipo='completo'){
     
   }catch(e){
     if(cancelled)return;
+    document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] '+e.message+'</div>';
     closeM();
     toast(e.message,'error');
     btn.disabled=false;btn.textContent=label;
