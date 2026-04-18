@@ -1015,9 +1015,9 @@ function handleRestoreDrop(e){
 async function descargarBackup(tipo='completo'){
   const btn=tipo==='config'?document.getElementById('btn-descargar-backup-config'):document.getElementById('btn-descargar-backup');
   const label=tipo==='config'?'⚙️ Solo Config':'💾 Completo';
-  btn.disabled=true;btn.textContent='Iniciando...';
+  btn.disabled=true;btn.textContent='Generando...';
   
-  // Mostrar modal de progreso
+  // Mostrar modal de progreso simple
   const token=localStorage.getItem('vd_t');
   const progresoEl=document.getElementById('mroot');
   progresoEl.innerHTML=`<div class="modal-overlay open">
@@ -1025,52 +1025,19 @@ async function descargarBackup(tipo='completo'){
       <div style="font-family:var(--font-head);font-size:18px;font-weight:700;margin-bottom:16px">
         ${tipo==='config'?'⚙️ Backup de Configuración':'💾 Backup Completo'}
       </div>
-      <div id="backup-progress-container" style="margin-bottom:16px">
-        <div id="backup-progress-msg" style="font-size:13px;color:var(--muted);margin-bottom:8px">Iniciando...</div>
-        <div style="background:var(--surface2);border-radius:6px;height:8px;overflow:hidden">
-          <div id="backup-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width .3s"></div>
-        </div>
+      <div style="font-size:14px;color:var(--muted);margin-bottom:16px">
+        Generando backup, por favor espera...
       </div>
-      <div id="backup-progress-error" style="display:none;padding:12px;background:rgba(247,97,79,.1);border-radius:8px;font-size:13px;color:var(--danger)"></div>
-      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
-        <button class="btn btn-secondary" id="backup-cancel-btn" onclick="cancelBackup()">Cancelar</button>
-        <button class="btn btn-primary" id="backup-close-btn" onclick="closeBackupProgress()" style="display:none">Cerrar</button>
+      <div style="text-align:center;font-size:24px;">⏳</div>
+      <div style="display:flex;justify-content:center;margin-top:16px">
+        <button class="btn btn-secondary" onclick="closeM();btn.disabled=false;btn.textContent='${label}'">Cancelar</button>
       </div>
     </div>
   </div>`;
   
-  let progressInterval=null;
-  let cancelled=false;
-  
-  window.cancelBackup=function(){cancelled=true;closeM();btn.disabled=false;btn.textContent=label};
-  window.closeBackupProgress=function(){closeM();btn.disabled=false;btn.textContent=label};
-  
-  // Escuchar progreso via polling
-  let pollInterval=null;
   try{
-    pollInterval=setInterval(async()=>{
-      try{
-        const p=await fetch('/api/backup/progreso',{headers:{Authorization:`Bearer ${token}`}});
-        if(p.ok){
-          const j=await p.json();
-          if(j.stage){
-            const pct=Math.round((j.current/j.total)*100)||0;
-            document.getElementById('backup-progress-bar').style.width=pct+'%';
-            document.getElementById('backup-progress-msg').textContent=j.message||'Procesando...';
-          }
-        }
-      }catch(_){}
-    },1000);
-    
-    // Add delay to allow progress to start
-    await new Promise(r=>setTimeout(r,500));
-    
     const url=tipo==='config'?'/api/backup?tipo=config':'/api/backup';
     const resp=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
-    
-    clearInterval(pollInterval);
-    
-    if(cancelled)return;
     
     if(!resp.ok){
       const j=await resp.json().catch(()=>({}));
@@ -1084,19 +1051,13 @@ async function descargarBackup(tipo='completo'){
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
     URL.revokeObjectURL(a.href);
     
-    document.getElementById('backup-progress-bar').style.width='100%';
-    document.getElementById('backup-progress-msg').textContent='✓ Backup completado';
-    document.getElementById('backup-progress-msg').style.color='var(--success)';
-    document.getElementById('backup-cancel-btn').style.display='none';
-    document.getElementById('backup-close-btn').style.display='inline-flex';
+    closeM();
     toast('Backup descargado','success');
   }catch(e){
-    if(cancelled)return;
-    document.getElementById('backup-progress-error').textContent=e.message;
-    document.getElementById('backup-progress-error').style.display='block';
-    document.getElementById('backup-cancel-btn').textContent='Cerrar';
-    document.getElementById('backup-cancel-btn').onclick=function(){closeM();btn.disabled=false;btn.textContent=label};
+    closeM();
+    toast(e.message,'error');
   }
+  btn.disabled=false;btn.textContent=label;
 }
 
 async function cargarListaBackups(){
