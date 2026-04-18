@@ -1031,13 +1031,18 @@ async function descargarBackup(tipo='completo'){
   
   window.testBackupConn=async function(){
     const term=document.getElementById('backup-terminal');
-    term.innerHTML+='<div>[TEST] Probando conexión...</div>';
+    term.innerHTML+='<div>[TEST] Probando /api/health...</div>';
     try{
       const resp=await fetch('/api/health',{headers:{Authorization:`Bearer ${token}`}});
       term.innerHTML+='<div>[TEST] Health: '+resp.status+' OK</div>';
-      const backupResp=await fetch('/api/backup/lista',{headers:{Authorization:`Bearer ${token}`}});
-      term.innerHTML+='<div>[TEST] Backup lista: '+backupResp.status+' OK</div>';
-      term.innerHTML+='<div style="color:#00ff00">[TEST] ✓ Conexión exitosa</div>';
+      
+      term.innerHTML+='<div>[TEST] Probando /api/backup?action=generate&tipo=config...</div>';
+      const startTime=Date.now();
+      const genResp=await fetch('/api/backup?action=generate&tipo=config',{headers:{Authorization:`Bearer ${token}`}});
+      const elapsed=Date.now()-startTime;
+      term.innerHTML+='<div>[TEST] Generate: '+genResp.status+' ('+elapsed+'ms)</div>';
+      
+      term.innerHTML+='<div style="color:#00ff00">[TEST] ✓ Todo OK</div>';
     }catch(e){
       term.innerHTML+='<div style="color:red">[TEST] ✗ Error: '+e.message+'</div>';
     }
