@@ -65,12 +65,13 @@ function construirFiltroCategorias(usuario) {
   return [];
 }
 
-// GET /api/facturas/stats — devuelve solo totales para badges
+// GET /api/facturas/stats
 router.get('/stats', (req, res) => {
+  console.log('[STATS] Endpoint called');
   res.json({ total: 0, pendientes_urgentes: 0 });
 });
 
-// ─── GET /api/facturas/pendientes ─────────────────────────────────────────────
+// GET /api/facturas/pendientes
 router.get('/pendientes', async (req, res) => {
   try {
     const hoy = new Date();
