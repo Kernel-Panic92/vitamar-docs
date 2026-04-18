@@ -1103,9 +1103,11 @@ async function descargarBackup(tipo='completo'){
   }catch(e){
     if(cancelled)return;
     document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] '+e.message+'</div>';
-    closeM();
-    toast(e.message,'error');
+    document.getElementById('backup-progress-msg').textContent='Error: '+e.message;
+    document.getElementById('backup-progress-msg').style.color='var(--danger)';
     btn.disabled=false;btn.textContent=label;
+    btn.onclick=function(){closeM()};
+    btn.textContent='Cerrar';
   }
 }
 
