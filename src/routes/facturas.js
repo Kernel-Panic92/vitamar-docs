@@ -65,6 +65,51 @@ function construirFiltroCategorias(usuario) {
   return [];
 }
 
+// GET /api/facturas/stats — devuelve solo totales para badges
+router.get('/stats', async (req, res) => {
+  try {
+    const filtroCats = construirFiltroCategorias(req.usuario);
+    let where = '1=1';
+    const params = [];
+    
+    if (filtroCats === null) {
+      // Admin ve todo
+    } else if (filtroCats.length === 0) {
+      return res.json({ total: 0, pendientes_urgentes: 0 });
+    } else if (filtroCats === 'AREA') {
+      where = `f.categoria_id IN (SELECT ca.categoria_id FROM categoria_area ca WHERE ca.area_id = $${params.length + 1})`;
+      params.push(req.usuario.area_id);
+    } else {
+      where = `f.categoria_id = ANY($${params.length + 1}::int[])`;
+      params.push(filtroCats);
+    }
+    
+    // Total facturas
+    const totalRes = await db.query(
+      `SELECT COUNT(*) as total FROM facturas f WHERE ${where}`,
+      params
+    );
+    
+    // Pendientes urgentes (próximos 3 días o vencidos)
+    const hoy = new Date();
+    const urgenteRes = await db.query(
+      `SELECT COUNT(*) as total FROM facturas f 
+       WHERE f.estado IN ('recibida','aprobada') 
+       AND f.fecha_limite_pago <= $${params.length + 1}
+       AND ${where}`,
+      [...params, new Date(hoy.getTime() + 3 * 24 * 60 * 60 * 1000)]
+    );
+    
+    res.json({
+      total: parseInt(totalRes.rows[0].total),
+      pendientes_urgentes: parseInt(urgenteRes.rows[0].total)
+    });
+  } catch (err) {
+    console.error('[Facturas stats] Error:', err.message);
+    res.json({ total: 0, pendientes_urgentes: 0 });
+  }
+});
+
 // ─── GET /api/facturas/pendientes ─────────────────────────────────────────────
 router.get('/pendientes', async (req, res) => {
   try {

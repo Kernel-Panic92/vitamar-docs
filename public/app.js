@@ -205,15 +205,11 @@ async function goTo(v){
 }
 async function refreshBadges(){
   try{
-    const [f,pend]=await Promise.all([
-      api('GET','/facturas?limit=200'),
-      api('GET','/facturas/pendientes')
-    ]);
-    const all=f.data||[];
+    const stats=await api('GET','/facturas/stats');
     const nb=$('nb-f');const np=$('nb-p');
-    if(nb)nb.textContent=f.total||all.length;
+    if(nb)nb.textContent=stats.total||0;
     if(np){
-      const urgentes=pend.data?.filter(x=>x.prioridad==='critico'||x.prioridad==='alerta').length||0;
+      const urgentes=stats.pendientes_urgentes||0;
       np.textContent=urgentes||'';
       np.style.background=urgentes?'var(--danger)':'rgba(251,191,36,.15)';
       np.style.color=urgentes?'#fff':'var(--warning)';
@@ -223,7 +219,7 @@ async function refreshBadges(){
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 async function rDash(){
-  const f=await api('GET','/facturas?limit=200');const all=f.data||[];
+  const f=await api('GET','/facturas?limit=100');const all=f.data||[];
   const por=s=>all.filter(x=>x.estado===s).length;
   const vc=all.filter(x=>x.estado==='causada'||x.estado==='pagada').reduce((a,x)=>a+parseFloat(x.valor_total||0),0);
   const sync=await checkSyncStatus();
