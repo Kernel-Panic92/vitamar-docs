@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const db = require('../db');
@@ -62,6 +64,9 @@ router.post('/', requireRol('admin'), async (req, res) => {
 // PUT /api/usuarios/:id
 router.put('/:id', requireRol('admin'), async (req, res) => {
   try {
+    const debugLog = `/root/vitamar-docs/logs/debug.log`;
+    fs.appendFileSync(debugLog, `PUT usuarios/${req.params.id} body: ${JSON.stringify(req.body)}\n`);
+    
     const { nombre, rol, area_id, activo, password } = req.body;
     const userId = req.params.id;
     
@@ -70,35 +75,31 @@ router.put('/:id', requireRol('admin'), async (req, res) => {
     console.error('[DEBUG] password provided:', !!password, 'length:', password ? password.length : 0);
     
     let params = [nombre?.trim(), rol, !!activo];
-    console.error('[DEBUG] params after initial:', params.length);
     
     let query = 'UPDATE usuarios SET nombre = $1, rol = $2, activo = $3';
     
     if (area_id && area_id !== '') {
       params.push(area_id);
       query += ', area_id = $' + params.length;
-      console.error('[DEBUG] added area_id, total params:', params.length);
     }
     
     if (password && password.trim() && password.length >= 8) {
       const hash = await bcrypt.hash(password, 12);
       params.push(hash);
       query += ', password_hash = $' + params.length;
-      console.error('[DEBUG] added password_hash, total params:', params.length);
     }
     
     params.push(userId);
     query += ', actualizado_en = NOW() WHERE id = $' + params.length + ' RETURNING id, nombre, email, rol, area_id, activo';
     
-    console.error('[DEBUG] Final query:', query);
-    console.error('[DEBUG] Final params count:', params.length);
+    fs.appendFileSync(debugLog, `Query: ${query}\nParams: ${params.length} items\n`);
     
     const { rows } = await db.query(query, params);
+    fs.appendFileSync(debugLog, `Query executed, rows: ${rows.length}\n`);
     if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
-    
     res.json(rows[0]);
   } catch (err) {
-    console.error('[DEBUG] ERROR:', err.message);
+    fs.appendFileSync(debugLog, `ERROR: ${err.message}\n`);
     res.status(500).json({ error: err.message });
   }
 });
