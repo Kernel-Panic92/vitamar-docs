@@ -27,6 +27,24 @@ echo ""
 
 [[ "$OSTYPE" != "linux-gnu"* ]] && err "Este instalador es para Linux (Ubuntu/Debian)."
 
+# ── 0. Detectar si está en filesystem de Windows (WSL) ──────
+if [[ "$INSTALL_DIR" == /mnt/* ]]; then
+  warn "Ejecutando desde filesystem de Windows (WSL)."
+  warn "Copiando a carpeta de Linux..."
+  
+  NEW_DIR="$HOME/vitamar-docs"
+  if [[ -d "$NEW_DIR" ]]; then
+    warn "Ya existe $NEW_DIR. Usando ese directorio."
+    cd "$NEW_DIR"
+  else
+    cp -r "$INSTALL_DIR" "$NEW_DIR"
+    chmod -R +x "$NEW_DIR"/*.sh 2>/dev/null || true
+  fi
+  cd "$NEW_DIR"
+  INSTALL_DIR=$(pwd)
+  ok "Directorio de trabajo: $INSTALL_DIR"
+fi
+
 # ── 1. Node.js ────────────────────────────────────────────────
 info "Verificando Node.js..."
 if ! command -v node &>/dev/null; then
