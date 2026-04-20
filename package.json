@@ -2,6 +2,7 @@
   "name": "vitamar-docs",
   "version": "1.0.0",
   "description": "Gestión documental de facturas electrónicas - Vitamar",
+  "author": "Kernel-Panic92",
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",

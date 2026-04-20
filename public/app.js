@@ -156,6 +156,14 @@ function showApp(){
   const rolClass={'admin':'role-admin','contador':'role-contador','tesorero':'role-tesorero','comprador':'role-comprador','auditor':'role-auditor'};
   $('u-badge').className=`role-badge ${rolClass[S.usuario?.rol]||'role-comprador'}`;
   $('u-badge').textContent=S.usuario?.rol||'';
+  
+  // Cargar versión
+  fetch('/api/version').then(r=>r.json()).then(d=>{
+    const el=document.getElementById('app-version');
+    if(el&&d.version)el.textContent='v'+d.version+' — Vitamar Docs';
+    const cr=document.getElementById('app-copyright');
+    if(cr&&d.author)cr.textContent=d.author;
+  }).catch(()=>{});
   if(S.empresaLogo){
     $('header-logo').innerHTML='<img src="'+S.empresaLogo+'" style="height:32px;border-radius:6px"/>';
     const loginLogo=$('login-logo-container');
