@@ -476,6 +476,8 @@ async function rCaus(){
 async function abrirF(id){
   const f=await api('GET',`/facturas/${id}`);
   if(!S.areas.length)S.areas=await api('GET','/areas');
+  if(!S.cats)S.cats=await api('GET','/categorias');
+  const catsPref=f.proveedor_id?(await api('GET',`/proveedores/${f.proveedor_id}/categorias-preferidas`)||[]):[];
   const ei=EORD.indexOf(f.estado);
   const prog=EORD.map((e,i)=>{const d=i<=ei;return`<div style="display:flex;align-items:center"><div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:12px;height:12px;border-radius:50%;border:2px solid var(--border);background:${d?'var(--accent)':'var(--surface2)'};flex-shrink:0"></div><span style="font-size:10px;color:${d?'var(--accent)':'var(--muted)'};margin-top:4px">${EM[e]?.l||e}</span></div>${i<EORD.length-1?`<div style="width:24px;height:2px;background:${d?'var(--accent)':'var(--border)'}"></div>`:''}</div>`}).join('');
   const acc=[];
@@ -497,7 +499,7 @@ async function abrirF(id){
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Estado</div><div style="margin-top:4px">${bdg(f.estado)}</div></div>
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Centro de operación</div><div style="font-weight:600;margin-top:4px">${esc(f.centro_operacion_nombre||'—')}</div></div>
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Área</div><div style="font-weight:500;margin-top:4px">${esc(f.area_nombre||'—')}</div></div>
-      <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Categoría</div><div style="margin-top:4px">${ctag(f.categoria_color,f.categoria_nombre)}</div></div>
+      <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Categoría</div><select id="fc-cat" style="margin-top:4px;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:100%" onchange="cambiarCat('${id}',this.value)">${S.cats.map(c=>`<option value="${c.id}" ${f.categoria_id===c.id?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select>${catsPref.length?`<div style="font-size:11px;color:var(--muted);margin-top:8px">💡 Más usadas para este proveedor:</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">${catsPref.map(cp=>`<span onclick="cambiarCat('${id}','${cp.id}')" style="cursor:pointer;padding:4px 8px;background:var(--surface);border-radius:4px;font-size:12px;color:var(--text);border:1px solid var(--border)">${esc(cp.nombre)} (${cp.contador})</span>`).join('')}</div>`:''}</div>
       ${f.centro_costos?`<div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Centro de costos</div><div style="font-weight:600;margin-top:4px">${esc(f.centro_costos)}</div></div>`:''}
       ${f.referencia?`<div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Orden de compra</div><div style="font-weight:500;margin-top:4px">${esc(f.referencia)}</div></div>`:''}
       ${f.descripcion_gasto?`<div style="grid-column:1/-1;background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Descripción del gasto</div><div style="margin-top:4px">${esc(f.descripcion_gasto)}</div></div>`:''}
@@ -1955,6 +1957,14 @@ async function mCentro(id){
 async function delCentro(id,nombre){
   if(!confirm(`¿Eliminar el centro "${nombre}"?`))return;
   try{await api('DELETE',`/centros/${id}`);toast('Centro eliminado','success');rCentros()}catch(e){toast(e.message,'error')}
+}
+
+async function cambiarCat(facturaId,catId){
+  try{
+    await api('PATCH',`/facturas/${facturaId}/categoria`,{categoria_id:catId});
+    toast('Categoría actualizada','success');
+    abrirF(facturaId);
+  }catch(e){toast(e.message,'error')}
 }
 
 // ─── INIT ───────────────────────────────────────────────────────────────────

@@ -360,6 +360,59 @@ router.post('/', upload.fields([{ name:'pdf', maxCount:1 }, { name:'xml', maxCou
   }
 });
 
+// PATCH /api/facturas/:id/categoria - cambiar categoría y guardar preferencia
+router.patch('/:id/categoria', async (req, res) => {
+  const { categoria_id } = req.body;
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+
+    // Obtener factura actual
+    const fact = await client.query(
+      'SELECT proveedor_id, categoria_id FROM facturas WHERE id = $1',
+      [req.params.id]
+    );
+    if (!fact.rows[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Factura no encontrada' }); }
+
+    const facturaActual = fact.rows[0];
+    const viejoCategoriaId = facturaActual.categoria_id;
+    const proveedorId = facturaActual.proveedor_id;
+
+    // Actualizar categoría
+    const { rows } = await client.query(
+      `UPDATE facturas SET categoria_id=$1, estado= CASE WHEN estado='recibida' THEN 'recibida' ELSE estado END
+       WHERE id=$2 RETURNING *`,
+      [categoria_id || null, req.params.id]
+    );
+
+    // Guardar preferencia: proveedor + nueva categoría
+    if (proveedorId && categoria_id && categoria_id !== viejoCategoriaId) {
+      await client.query(
+        `INSERT INTO proveedor_categoria_preferencia (proveedor_id, categoria_id, contador, actualizado_en)
+         VALUES ($1, $2, 1, NOW())
+         ON CONFLICT (proveedor_id, categoria_id)
+         DO UPDATE SET contador = proveedor_categoria_preferencia.contador + 1, actualizado_en = NOW()`,
+        [proveedorId, categoria_id]
+      );
+
+      // Si cambió categoría por defecto del proveedor, actualizarla
+      await client.query(
+        `UPDATE proveedores SET categoria_default_id = $1 WHERE id = $2 AND categoria_default_id IS DISTINCT FROM $1`,
+        [categoria_id, proveedorId]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json(rows[0]);
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 // ─── PATCH /api/facturas/:id/asignar ─────────────────────────────────────────
 router.patch('/:id/asignar', async (req, res) => {
   const { area_responsable_id, asignado_a_id } = req.body;

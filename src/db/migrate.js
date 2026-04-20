@@ -272,6 +272,18 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
 `ALTER TABLE facturas ADD COLUMN IF NOT EXISTS soporte_pago_nombre VARCHAR(255)`,
 `ALTER TABLE facturas ADD COLUMN IF NOT EXISTS pagada_en TIMESTAMPTZ`,
 
+// ─── 023: Proveedor → Categoría (aprendizaje automático) ──────────────────
+`CREATE TABLE IF NOT EXISTS proveedor_categoria_preferencia (
+  proveedor_id UUID NOT NULL REFERENCES proveedores(id) ON DELETE CASCADE,
+  categoria_id UUID NOT NULL REFERENCES categorias_compra(id) ON DELETE CASCADE,
+  contador INTEGER NOT NULL DEFAULT 1,
+  actualizado_en TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (proveedor_id, categoria_id)
+)`,
+
+// ─── 024: Categoría por defecto en proveedor ────────────────────────────────
+`ALTER TABLE proveedores ADD COLUMN IF NOT EXISTS categoria_default_id UUID REFERENCES categorias_compra(id) ON DELETE SET NULL`,
+
 ];
 
 async function migrate() {

@@ -218,15 +218,16 @@ function extraerZip(zipBuffer) {
 }
 
 async function crearProveedorSiNoExiste(client, nitEmisor, nombreEmisor, emailOrigen) {
-  if (!nitEmisor) return null;
+  if (!nitEmisor) return { id: null, categoria_default_id: null };
   
   const existente = await client.query(
-    'SELECT id FROM proveedores WHERE nit = $1 AND activo = TRUE LIMIT 1',
+    'SELECT id, categoria_default_id FROM proveedores WHERE nit = $1 AND activo = TRUE LIMIT 1',
     [nitEmisor]
   );
   
   if (existente.rows.length > 0) {
-    return existente.rows[0].id;
+    const row = existente.rows[0];
+    return { id: row.id, categoria_default_id: row.categoria_default_id };
   }
   
   const nombre = nombreEmisor || `Proveedor NIT ${nitEmisor}`;
@@ -236,12 +237,13 @@ async function crearProveedorSiNoExiste(client, nitEmisor, nombreEmisor, emailOr
     `INSERT INTO proveedores (nit, nombre, email_facturacion, telefono, direccion)
      VALUES ($1, $2, $3, NULL, NULL)
      ON CONFLICT (nit) DO UPDATE SET nombre = EXCLUDED.nombre, email_facturacion = COALESCE(EXCLUDED.email_facturacion, proveedores.email_facturacion)
-     RETURNING id`,
+     RETURNING id, categoria_default_id`,
     [nitEmisor, nombre, email]
   );
   
   console.log(`  [IMAP] Proveedor creado/encontrado: ${nombre} (NIT: ${nitEmisor})`);
-  return result.rows[0].id;
+  const row = result.rows[0];
+  return { id: row.id, categoria_default_id: row.categoria_default_id };
 }
 
 async function procesarCorreo(parsed, msgId) {
@@ -322,7 +324,9 @@ async function procesarCorreo(parsed, msgId) {
       return 'duplicada';
     }
 
-    const proveedorId = await crearProveedorSiNoExiste(client, nitEmisor, nombreEmisor, emailOrigen);
+    const proveedor = await crearProveedorSiNoExiste(client, nitEmisor, nombreEmisor, emailOrigen);
+    const proveedorId = proveedor?.id;
+    const categoriaSugerida = proveedor?.categoria_default_id;
 
     const ahora = new Date();
     const referencia = fechaFactura ? fechaFactura.toISOString().split('T')[0] : ahora.toISOString().split('T')[0];
@@ -330,7 +334,7 @@ async function procesarCorreo(parsed, msgId) {
 
     const { rows } = await client.query(
       `INSERT INTO facturas (
-          numero_factura, proveedor_id, archivo_pdf, archivo_xml,
+          numero_factura, proveedor_id, categoria_id, archivo_pdf, archivo_xml,
           email_origen, email_asunto,
           limite_dian, limite_pago, estado,
           valor_total, valor_iva, valor,
@@ -341,6 +345,7 @@ async function procesarCorreo(parsed, msgId) {
       [
         numeroFactura,
         proveedorId,
+        categoriaSugerida || null,
         archivoPdf,
         archivoXml,
         emailOrigen,
