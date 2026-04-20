@@ -475,8 +475,8 @@ async function rCaus(){
 // ─── FACTURA DETALLE ─────────────────────────────────────────────────────────
 async function abrirF(id){
   const f=await api('GET',`/facturas/${id}`);
-  if(!S.areas.length)S.areas=await api('GET','/areas');
-  if(!S.cats)S.cats=await api('GET','/categorias');
+  if(!S.areas?.length)S.areas=await api('GET','/areas');
+  if(!S.cats?.length)S.cats=await api('GET','/categorias');
   const catsPref=f.proveedor_id?(await api('GET',`/proveedores/${f.proveedor_id}/categorias-preferidas`)||[]):[];
   const ei=EORD.indexOf(f.estado);
   const prog=EORD.map((e,i)=>{const d=i<=ei;return`<div style="display:flex;align-items:center"><div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:12px;height:12px;border-radius:50%;border:2px solid var(--border);background:${d?'var(--accent)':'var(--surface2)'};flex-shrink:0"></div><span style="font-size:10px;color:${d?'var(--accent)':'var(--muted)'};margin-top:4px">${EM[e]?.l||e}</span></div>${i<EORD.length-1?`<div style="width:24px;height:2px;background:${d?'var(--accent)':'var(--border)'}"></div>`:''}</div>`}).join('');
@@ -596,8 +596,8 @@ async function acF(id,a){
 
 // ─── NUEVA FACTURA ───────────────────────────────────────────────────────────
 async function mNuevaF(){
-  if(!S.areas.length)S.areas=await api('GET','/areas');
-  if(!S.cats.length)S.cats=await api('GET','/categorias');
+  if(!S.areas?.length)S.areas=await api('GET','/areas');
+  if(!S.cats?.length)S.cats=await api('GET','/categorias');
   const ao=S.areas.map(a=>`<option value="${a.id}">${esc(a.nombre)}</option>`).join('');
   const co=S.cats.map(c=>`<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
   window.gF=async()=>{
