@@ -332,16 +332,38 @@ router.post('/updater/check', requireRol('admin'), async (req, res) => {
 });
 
 router.post('/updater/update', requireRol('admin'), async (req, res) => {
+  let branch = req.body?.branch || 'main';
+  
+  if (!/^[a-zA-Z0-9_\-]+$/.test(branch)) {
+    return res.status(400).json({ ok: false, error: 'Rama inválida. Solo letras, números, guiones y guiones bajos.' });
+  }
+  
   try {
     logUpdater('========================================');
-    logUpdater('INICIANDO ACTUALIZACION');
+    logUpdater('INICIANDO ACTUALIZACION (rama: ' + branch + ')');
     logUpdater('========================================');
     
     logUpdater('1. Guardando cambios locales...');
     execSync('git add -A && git stash 2>/dev/null || true', { cwd: APP_DIR, stdio: 'pipe' });
     
-    logUpdater('2. Pulling latest changes...');
-    execSync('git pull origin main 2>/dev/null || git pull origin master 2>/dev/null', { cwd: APP_DIR, stdio: 'pipe' });
+    logUpdater('2. Pulling latest changes from ' + branch + '...');
+    const allowedBranches = ['main', 'master', 'release'];
+    if (branch !== 'release' && !allowedBranches.includes(branch)) {
+      branch = 'main';
+    }
+    if (branch === 'release') {
+      execSync('git fetch origin release && git checkout release && git pull origin release', { cwd: APP_DIR, stdio: 'pipe' });
+      logUpdater('2b. Rama release - sin cambios locales');
+    } else {
+      try {
+        execSync('git pull origin ' + branch, { cwd: APP_DIR, stdio: 'pipe' });
+      } catch (e) {
+        execSync('git fetch origin && git reset --hard origin/' + branch, { cwd: APP_DIR, stdio: 'pipe' });
+      }
+      
+      logUpdater('5. Restaurando cambios locales...');
+      execSync('git stash pop 2>/dev/null || true', { cwd: APP_DIR, stdio: 'pipe' });
+    }
     
     logUpdater('3. Instalando dependencias...');
     try {
@@ -576,11 +598,20 @@ router.put('/backups-auto', requireRol('admin'), async (req, res) => {
 });
 
 router.post('/backups-auto/test', requireRol('admin'), async (req, res) => {
-  const { path: backupPath, type, host, user, pass } = req.body;
+  let { path: backupPath, type, host, user, pass } = req.body;
+  
+  if (!host || !user || !pass) {
+    return res.status(400).json({ ok: false, error: 'Faltan parámetros requeridos' });
+  }
   
   try {
     if (type === 'smb' && host) {
-      const test = execSync(`curl -s -u "${user}:${pass}" --connect-timeout 5 "smb://${host.replace(/\\/g, '/')}/" 2>&1 || echo "FAIL"`, { stdio: 'pipe' }).toString();
+      host = host.replace(/[^a-zA-Z0-9._\-\/]/g, '');
+      user = user.replace(/[^a-zA-Z0-9._\-@]/g, '');
+      pass = pass.replace(/["`$]/g, '');
+      
+      const safeUrl = `smb://${encodeURIComponent(host.replace(/\\/g, '/'))}/`;
+      const test = execSync(`curl -s -u "${user}:${pass}" --connect-timeout 5 "${safeUrl}" 2>&1 || echo "FAIL"`, { stdio: 'pipe' }).toString();
       if (test.includes('FAIL')) {
         return res.status(400).json({ ok: false, error: 'No se pudo conectar al servidor SMB' });
       }
@@ -620,7 +651,8 @@ router.post('/backups-auto/now', requireRol('admin'), async (req, res) => {
     }
     
     const fecha = new Date().toISOString().slice(0, 10);
-    const filename = `vitamar_backup_${fecha}.zip`;
+    const timestamp = Date.now();
+    const filename = `vitamar_backup_${fecha}_${timestamp}.zip`;
     const backupPath = path.join(backupDir, filename);
     
     const db = require('../db');
@@ -642,6 +674,16 @@ router.post('/backups-auto/now', requireRol('admin'), async (req, res) => {
     await agregarQuery('SELECT * FROM proveedores', 'proveedores');
     await agregarQuery('SELECT clave, valor FROM configuracion', 'configuracion');
     await agregarQuery('SELECT id, nombre, email, rol, activo, cambio_password, creado_en FROM usuarios', 'usuarios');
+    
+    // Agregar uploads (facturas y adjuntos)
+    const uploadsDir = path.join(APP_DIR, 'uploads');
+    if (fs.existsSync(uploadsDir)) {
+      const files = fs.readdirSync(uploadsDir);
+      if (files.length > 0) {
+        console.log('[Backup] Agregando', files.length, 'archivos de uploads');
+        zip.addLocalFolder(uploadsDir, 'uploads');
+      }
+    }
     
     zip.writeZip(backupPath);
     console.log('[Backup] Archivo escrito:', backupPath);
@@ -687,10 +729,13 @@ router.put('/cron', requireRol('admin'), async (req, res) => {
   const { cron_imap, cron_escalaciones, cron_dian, cron_notificaciones } = req.body;
   
   try {
-    const imapCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/imap.service\').pollCorreo()" >> /root/vitamar-docs/logs/imap.log 2>&1';
-    const escCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/cron.service\').ejecutarEscalaciones()" >> /root/vitamar-docs/logs/cron.log 2>&1';
-    const dianCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/cron.service\').verificarDianTacita()" >> /root/vitamar-docs/logs/cron.log 2>&1';
-    const notifCmd = 'cd /root/vitamar-docs && /usr/bin/node -e "require(\'./src/services/cron.service\').enviarNotificaciones()" >> /root/vitamar-docs/logs/cron.log 2>&1';
+    const SCRIPT_DIR = '/root/vitamar-docs/scripts';
+    const APP_DIR_PATH = '/root/vitamar-docs';
+    
+    const imapCmd = `${SCRIPT_DIR}/cron-imap.sh`;
+    const escCmd = `${SCRIPT_DIR}/cron-escalaciones.sh`;
+    const dianCmd = `${SCRIPT_DIR}/cron-dian.sh`;
+    const notifCmd = `${SCRIPT_DIR}/cron-notificaciones.sh`;
     
     const lines = ['# Vitamar Docs - Tareas programadas'];
     
@@ -700,7 +745,16 @@ router.put('/cron', requireRol('admin'), async (req, res) => {
     if (cron_notificaciones) lines.push(`${cron_notificaciones} ${notifCmd}`);
     
     const newCrontab = lines.join('\n') + '\n';
-    execSync(`echo "${newCrontab}" | crontab -`, { stdio: 'pipe' });
+    
+    console.log('[CRON] New crontab:', newCrontab);
+    
+    const cronFile = path.join(APP_DIR_PATH, 'temp_cron.txt');
+    fs.writeFileSync(cronFile, newCrontab);
+    console.log('[CRON] File written, running crontab command');
+    
+    execSync(`crontab "${cronFile}"`, { stdio: 'pipe' });
+    console.log('[CRON] Crontab installed');
+    try { fs.unlinkSync(cronFile); } catch(e) {}
     
     await db.query(
       `INSERT INTO configuracion (clave, valor, actualizado_en) VALUES 
@@ -709,7 +763,7 @@ router.put('/cron', requireRol('admin'), async (req, res) => {
        ON CONFLICT (clave) DO UPDATE SET valor=EXCLUDED.valor, actualizado_en=NOW()`,
       [cron_imap || '', cron_escalaciones || '', cron_dian || '', cron_notificaciones || '']
     );
-    
+
     res.json({ ok: true, message: 'Tareas CRON actualizadas' });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -11,7 +11,7 @@ const COLS=['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#F97316','#06B6D4
 const PASOS=[{id:'recepcion',l:'Recepción',d:'Sistema recibe'},{id:'revision',l:'Revisión',d:'Asigna CC'},{id:'aprobacion',l:'Aprobación',d:'Responsable'},{id:'causacion',l:'Causación',d:'Tesorería'},{id:'pagada',l:'Pagada',d:'Archivada'}];
 const EORD=['recibida','revision','aprobada','causada','pagada'];
 const EM={recibida:{l:'Recibida',c:'#60A5FA'},revision:{l:'En revisión',c:'#FBBF24'},aprobada:{l:'Aprobada',c:'#34D399'},causada:{l:'Causada',c:'#A78BFA'},rechazada:{l:'Rechazada',c:'#F87171'},pagada:{l:'Pagada',c:'#6EE7B7'}};
-const NAV=[{id:'dashboard',l:'Dashboard',i:'📊',s:'p'},{id:'facturas',l:'Facturas',i:'📄',s:'p',badge:'f'},{id:'pendientes',l:'Pendientes',i:'⏳',s:'f',badge:'p',w:true},{id:'aprobaciones',l:'Aprobaciones',i:'✓',s:'f'},{id:'causacion',l:'Causación',i:'📥',s:'f'},{id:'categorias',l:'Categorías',i:'🏷️',s:'c'},{id:'areas',l:'Áreas',i:'🏢',s:'c'},{id:'centros',l:'Centros',i:'🗺️',s:'c'},{id:'configuracion',l:'Configuración',i:'⚙️',s:'c',admin:true},{id:'backup',l:'Backup',i:'💾',s:'c',admin:true},{id:'usuarios',l:'Usuarios',i:'👤',s:'c',admin:true},{id:'audit',l:'Auditoría',i:'🔒',s:'c',roles:['admin','auditor']}];
+const NAV=[{id:'dashboard',l:'Dashboard',i:'📊',s:'p'},{id:'facturas',l:'Facturas',i:'📄',s:'p'},{id:'pendientes',l:'Pendientes',i:'⏳',s:'f',w:true},{id:'aprobaciones',l:'Aprobaciones',i:'✓',s:'f'},{id:'causacion',l:'Causación',i:'📥',s:'f'},{id:'categorias',l:'Categorías',i:'🏷️',s:'c'},{id:'areas',l:'Áreas',i:'🏢',s:'c'},{id:'centros',l:'Centros',i:'🗺️',s:'c'},{id:'configuracion',l:'Configuración',i:'⚙️',s:'c',roles:['admin']},{id:'backup',l:'Backup',i:'💾',s:'c',roles:['admin']},{id:'usuarios',l:'Usuarios',i:'👤',s:'c',roles:['admin']},{id:'audit',l:'Auditoría',i:'🔒',s:'c',roles:['admin','auditor']}];
 const SECS=[{id:'p',l:'Principal'},{id:'f',l:'Flujo'},{id:'c',l:'Config'}];
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -204,26 +204,12 @@ async function goTo(v){
   }catch(ex){el.innerHTML=`<div class="empty" style="color:var(--danger)">${ex.message}</div>`}
 }
 async function refreshBadges(){
-  try{
-    const [f,pend]=await Promise.all([
-      api('GET','/facturas?limit=200'),
-      api('GET','/facturas/pendientes')
-    ]);
-    const all=f.data||[];
-    const nb=$('nb-f');const np=$('nb-p');
-    if(nb)nb.textContent=f.total||all.length;
-    if(np){
-      const urgentes=pend.data?.filter(x=>x.prioridad==='critico'||x.prioridad==='alerta').length||0;
-      np.textContent=urgentes||'';
-      np.style.background=urgentes?'var(--danger)':'rgba(251,191,36,.15)';
-      np.style.color=urgentes?'#fff':'var(--warning)';
-    }
-  }catch(_){}
+  // Badges removed from menu - badges only shown when opening modals
 }
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 async function rDash(){
-  const f=await api('GET','/facturas?limit=200');const all=f.data||[];
+  const f=await api('GET','/facturas?limit=100');const all=f.data||[];
   const por=s=>all.filter(x=>x.estado===s).length;
   const vc=all.filter(x=>x.estado==='causada'||x.estado==='pagada').reduce((a,x)=>a+parseFloat(x.valor_total||0),0);
   const sync=await checkSyncStatus();
@@ -918,20 +904,20 @@ async function rBackup(){
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;">
         <div style="font-weight:700;font-size:16px;margin-bottom:6px;">📦 Exportar Backup</div>
         <p style="color:var(--muted);font-size:13px;margin-bottom:20px;line-height:1.6;">
-          Descarga un archivo <strong style="color:var(--text)">ZIP</strong> con toda la información del sistema.
+          Descarga un archivo <strong style="color:var(--text)">ZIP</strong> con la información del sistema.
           Incluye un <code style="color:var(--accent)">backup.json</code> para restaurar.
         </p>
         <div style="background:var(--surface2);border-radius:10px;padding:16px;margin-bottom:20px;font-size:13px;">
-          <div style="font-weight:600;margin-bottom:10px;">El backup incluye:</div>
+          <div style="font-weight:600;margin-bottom:10px;">Opciones de backup:</div>
           <div style="display:flex;flex-direction:column;gap:6px;color:var(--muted);">
-            <span>✓ Facturas y proveedores</span>
-            <span>✓ Categorías y áreas</span>
-            <span>✓ Usuarios del sistema</span>
-            <span>✓ Centros de operación</span>
-            <span>✓ Configuración IMAP/SMTP</span>
+            <span>✓ Solo configuración (∼20KB): Facturas, categorías, usuarios, áreas, configuración</span>
+            <span>✓ Completo (∼variable): Lo anterior + archivos subidos (PDFs, facturas, adjuntos)</span>
           </div>
         </div>
-        <button class="btn btn-primary" id="btn-descargar-backup" onclick="descargarBackup()" style="width:100%;justify-content:center;padding:13px;">💾 Descargar Backup ZIP</button>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-secondary" id="btn-descargar-backup-config" onclick="descargarBackup('config')" style="flex:1;justify-content:center;padding:11px;">⚙️ Solo Config</button>
+          <button class="btn btn-primary" id="btn-descargar-backup" onclick="descargarBackup('completo')" style="flex:1;justify-content:center;padding:11px;">💾 Completo</button>
+        </div>
         <div id="backup-ok" style="display:none;margin-top:14px;padding:10px 14px;background:rgba(79,190,150,0.1);border:1px solid rgba(79,190,150,0.3);border-radius:9px;font-size:13px;color:var(--success);">✓ Backup generado y descargado correctamente.</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;">
@@ -942,7 +928,10 @@ async function rBackup(){
         <div style="margin-bottom:20px;">
           <div style="font-size:13px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
             <span>📁 Backups en el Servidor</span>
-            <button class="btn btn-secondary btn-sm" onclick="cargarListaBackups()">🔄 Actualizar</button>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-primary btn-sm" onclick="generarBackupServidor()">➕ Generar</button>
+              <button class="btn btn-secondary btn-sm" onclick="cargarListaBackups()">🔄 Actualizar</button>
+            </div>
           </div>
           <div id="lista-backups-loading" style="text-align:center;padding:16px;color:var(--muted);font-size:13px;">Cargando...</div>
           <div id="lista-backups-none" style="display:none;text-align:center;padding:16px;color:var(--muted);font-size:12px;background:var(--surface2);border-radius:9px;">🕐 No hay backups disponibles</div>
@@ -1009,24 +998,133 @@ function handleRestoreDrop(e){
   }
 }
 
-async function descargarBackup(){
-  const btn=document.getElementById('btn-descargar-backup');
-  btn.disabled=true;btn.textContent='Generando...';
+async function descargarBackup(tipo='completo'){
+  const btn=tipo==='config'?document.getElementById('btn-descargar-backup-config'):document.getElementById('btn-descargar-backup');
+  const label=tipo==='config'?'⚙️ Solo Config':'💾 Completo';
+  btn.disabled=true;btn.textContent='Verificando...';
+  
+  const token=localStorage.getItem('vd_t');
+  
+  // Verificar conexión primero
   try{
-    const token=localStorage.getItem('vd_t');
-    const resp=await fetch('/api/backup',{headers:{Authorization:`Bearer ${token}`}});
-    if(!resp.ok){
-      const j=await resp.json().catch(()=>({}));
-      throw new Error(j.error||'Error');
+    await fetch('/api/backup?action=generate&tipo=config',{headers:{Authorization:`Bearer ${token}`}});
+  }catch(e){
+    btn.disabled=false;btn.textContent=label;
+    toast('Sin conexión al servidor','error');
+    return;
+  }
+  
+  btn.textContent='Generando...';
+  const progresoEl=document.getElementById('mroot');
+  progresoEl.innerHTML=`<div class="modal-overlay open">
+    <div class="modal" style="max-width:520px">
+      <div style="font-family:var(--font-head);font-size:18px;font-weight:700;margin-bottom:16px">
+        ${tipo==='config'?'⚙️ Backup de Configuración':'💾 Backup Completo'}
+      </div>
+      <div id="backup-progress-msg" style="font-size:14px;color:var(--muted);margin-bottom:12px">Iniciando...</div>
+      <div style="background:var(--surface2);border-radius:6px;height:10px;overflow:hidden;margin-bottom:16px">
+        <div id="backup-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width .5s"></div>
+      </div>
+      <div id="backup-terminal" style="background:#1a1a1a;color:#00ff00;font-family:monospace;font-size:11px;padding:12px;border-radius:6px;height:120px;overflow-y:auto;line-height:1.6;margin-bottom:16px">
+        <div style="opacity:0.7">[...] Iniciando backup...</div>
+      </div>
+      <div style="display:flex;justify-content:center">
+        <button class="btn btn-secondary" onclick="window.cancelarBackupGen()">Cancelar</button>
+      </div>
+    </div>
+  </div>`;
+  
+  let cancelled=false;
+  let pollInterval=null;
+  
+  window.cancelarBackupGen=function(){cancelled=true;if(pollInterval)clearInterval(pollInterval);closeM();btn.disabled=false;btn.textContent=label};
+  
+  try{
+    // Paso 1: Generar backup
+    const url=tipo==='config'?'/api/backup?action=generate&tipo=config&_='+Date.now():'/api/backup?action=generate&tipo=completo&_='+Date.now();
+    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] URL: '+url+'</div>';
+    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Tipo: '+(tipo==='completo'?'COMPLETO (puede tardar)' : 'CONFIG (rápido)')+'</div>';
+    document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Token: '+(token?'presente':'FALTA')+'</div>';
+    let resp;
+    try{
+      const startTime = Date.now();
+      resp=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
+      const elapsed = Date.now() - startTime;
+      document.getElementById('backup-terminal').innerHTML+='<div>[INFO] Tiempo: '+elapsed+'ms, Status: '+resp.status+'</div>';
+    }catch(e){
+      document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] Fetch falló: '+e.name+' - '+e.message+'</div>';
+      throw e;
     }
-    const blob=await resp.blob();
-    const fecha=new Date().toISOString().slice(0,10);
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='vitamar_backup_'+fecha+'.zip';a.click();
-    URL.revokeObjectURL(a.href);
-    document.getElementById('backup-ok').style.display='block';
-    setTimeout(()=>{document.getElementById('backup-ok').style.display='none'},5000);
-  }catch(e){toast(e.message,'error')}
-  btn.disabled=false;btn.textContent='💾 Descargar Backup ZIP';
+    
+    if(!resp.ok){
+      const errData=await resp.json().catch(()=>({}));
+      document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] '+ (errData.error||'Error '+resp.status) +'</div>';
+      throw new Error(errData.error||'Error generando');
+    }
+    
+    const data=await resp.json();
+    if(cancelled)return;
+    
+    document.getElementById('backup-progress-bar').style.width='100%';
+    document.getElementById('backup-progress-msg').textContent='Completado! Descargando...';
+    document.getElementById('backup-progress-msg').style.color='var(--success)';
+    document.getElementById('backup-terminal').innerHTML+='<div style="color:#00ff00;margin-top:8px">[OK] Backup completado</div>';
+    
+    // Paso 2: Descargar
+    setTimeout(function(){
+      document.getElementById('backup-terminal').innerHTML+='<div>[DESCARGANDO] Descargando archivo...</div>';
+      (async function(){
+        try{
+        const dlUrl=`/api/backup?action=download&filename=${encodeURIComponent(data.filename)}`;
+        const dlResp=await fetch(dlUrl,{headers:{Authorization:`Bearer ${token}`}});
+        if(!dlResp.ok)throw new Error('Error descargando');
+        
+        const blob=await dlResp.blob();
+        const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=data.filename;a.click();
+        URL.revokeObjectURL(a.href);
+        
+        document.getElementById('backup-terminal').innerHTML+='<div style="color:#00ff00">[OK] Descarga completada!</div>';
+        setTimeout(function(){
+          closeM();
+          toast('Backup descargado','success');
+          cargarListaBackups();
+        },1000);
+      }catch(e){
+        document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[X] Error: '+e.message+'</div>';
+        closeM();
+        toast(e.message,'error');
+      }
+      })();
+      btn.disabled=false;btn.textContent=label;
+    },500);
+    
+    // Polling para progreso mientras genera
+    pollInterval=setInterval(async()=>{
+      try{
+        const p=await fetch('/api/backup/progreso',{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json());
+        if(p.stage && p.stage!=='done'){
+          const pct=Math.round((p.current/p.total)*100)||0;
+          document.getElementById('backup-progress-bar').style.width=pct+'%';
+          document.getElementById('backup-progress-msg').textContent=p.message||'Procesando...';
+          // Agregar al terminal
+          const term=document.getElementById('backup-terminal');
+          if(term && p.message){
+            term.innerHTML+=`<div>→ ${p.message}</div>`;
+            term.scrollTop=term.scrollHeight;
+          }
+        }
+      }catch(_){}
+    },800);
+    
+  }catch(e){
+    if(cancelled)return;
+    document.getElementById('backup-terminal').innerHTML+='<div style="color:red">[ERROR] '+e.message+'</div>';
+    document.getElementById('backup-progress-msg').textContent='Error: '+e.message;
+    document.getElementById('backup-progress-msg').style.color='var(--danger)';
+    btn.disabled=false;btn.textContent=label;
+    btn.onclick=function(){closeM()};
+    btn.textContent='Cerrar';
+  }
 }
 
 async function cargarListaBackups(){
@@ -1353,7 +1451,6 @@ async function renderCfgTab(cfg){
         </div>
         <div style="display:flex;gap:10px;margin-top:20px">
           <button class="btn btn-primary" onclick="guardarCfg('backups')">💾 Guardar</button>
-          <button class="btn btn-secondary" onclick="ejecutarBackupAhora()">⚡ Backup ahora</button>
         </div>
       </div>
 
@@ -1524,6 +1621,17 @@ async function ejecutarBackupAhora(){
   }catch(e){toast(e.message,'error')}
 }
 
+async function generarBackupServidor(){
+  const btn=event.target;
+  btn.disabled=true;btn.textContent='Generando...';
+  try{
+    const r=await api('POST','/configuracion/backups-auto/now');
+    toast(r.path?'Backup creado en servidor':'Backup generado','success');
+    cargarListaBackups();
+  }catch(e){toast(e.message,'error')}
+  btn.disabled=false;btn.textContent='➕ Generar';
+}
+
 async function verCronLogs(){
   try{
     const r=await api('GET','/configuracion/cron/logs');
@@ -1656,12 +1764,28 @@ async function ejecutarActualizacion(){
         await cargarLogActualizacion();
         try{
           const status=await api('GET','/configuracion/updater/status');
-          if(status&&status.message?.includes('COMPLETADA')){
+          if(status&&status.updaterLog?.includes('COMPLETADA')){
             clearInterval(updatePolling);
-            toast('Sistema actualizado','success');
-            await api('POST','/configuracion/updater/restart');
-            toast('Reiniciando servicio...','info');
-            setTimeout(()=>location.reload(),3000);
+            toast('Actualización completada, reiniciando...','success');
+            try{
+              await api('POST','/configuracion/updater/restart');
+            }catch(e){}
+            // Esperar hasta que el servidor responda
+            let intentos=0;
+            const esperarServidor=setInterval(async()=>{
+              try{
+                await fetch('/api/health');
+                clearInterval(esperarServidor);
+                toast('Servicio reiniciado','success');
+                window.location.reload();
+              }catch(e){
+                intentos++;
+                if(intentos>60){
+                  clearInterval(esperarServidor);
+                  window.location.reload();
+                }
+              }
+            },2000);
           }
         }catch(e){}
       },3000);

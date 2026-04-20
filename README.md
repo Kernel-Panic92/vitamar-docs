@@ -365,18 +365,6 @@ node src/db/migrate.js  # si hay migraciones pendientes
 pm2 restart vitamar-docs
 ```
 
----
-
-## Releases
-
-Las releases se publican en GitHub. Para crear una release:
-
-1. En GitHub, ir a **Releases** → **Draft a new release**
-2. Seleccionar tag (ej: `v1.2.0`)
-3. Poner nombre y descripción
-4. Marcar como **Release** (no pre-release) para canal estable
-
----
 
 ## Solución de problemas
 

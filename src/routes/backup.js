@@ -23,6 +23,9 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(APP_DIR, 'uploads');
 
 console.log('[Backup] Directorio de backups:', BACKUP_DIR);
 
+// Progress para SSE
+let backupProgress = { total: 0, current: 0, message: '', stage: '' };
+
 function ensureBackupDir() {
   if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
 }
@@ -44,7 +47,8 @@ function getBackupFiles() {
 }
 
 // Helper: genera el ZIP en memoria
-async function generarZip() {
+// tipo: 'config' (solo DB) | 'completo' (DB + uploads)
+async function generarZip(tipo = 'completo') {
   const zip = new AdmZip();
 
   const query = async (sql, fallback = []) => {
@@ -57,11 +61,23 @@ async function generarZip() {
     }
   };
 
+  backupProgress = { total: 10, current: 0, message: 'Iniciando...', stage: 'inicio' };
+
   const cfg = await query('SELECT clave, valor FROM configuracion');
+  backupProgress.current = 1; backupProgress.message = 'Configuración'; backupProgress.stage = 'config';
+  
   const usuarios = await query('SELECT id, nombre, email, rol, area_id, activo, cambio_password, creado_en FROM usuarios');
+  backupProgress.current = 2; backupProgress.message = 'Usuarios'; backupProgress.stage = 'usuarios';
+  
   const areas = await query('SELECT * FROM areas');
+  backupProgress.current = 3; backupProgress.message = 'Áreas'; backupProgress.stage = 'areas';
+  
   const cats = await query('SELECT * FROM categorias_compra');
+  backupProgress.current = 4; backupProgress.message = 'Categorías'; backupProgress.stage = 'categorias';
+  
   const centros = await query('SELECT * FROM centros_operacion');
+  backupProgress.current = 5; backupProgress.message = 'Centros'; backupProgress.stage = 'centros';
+  
   const facturas = await query(`
     SELECT f.*, p.nombre AS proveedor_nombre, p.nit AS proveedor_nit,
            c.nombre AS categoria_nombre, c.color AS categoria_color
@@ -70,11 +86,15 @@ async function generarZip() {
     LEFT JOIN categorias_compra c ON c.id = f.categoria_id
     ORDER BY f.recibida_en DESC LIMIT 1000
   `);
+  backupProgress.current = 6; backupProgress.message = `Facturas (${facturas.length})`; backupProgress.stage = 'facturas';
+  
   const eventos = await query('SELECT * FROM eventos_flujo ORDER BY creado_en DESC LIMIT 5000');
+  backupProgress.current = 7; backupProgress.message = 'Eventos'; backupProgress.stage = 'eventos';
 
   const data = {
     app:       'VitamarDocs',
     version:   '1.0',
+    tipo:      tipo,
     generado:  new Date().toISOString(),
     config:    cfg,
     usuarios:  usuarios.map(u => ({ ...u, password_hash: '(backup_excluded)' })),
@@ -82,47 +102,96 @@ async function generarZip() {
     categorias: cats,
     centros:   centros,
     facturas:  facturas,
-    eventos:   eventos,
+    eventos:   eventos.length
   };
 
-  console.log('[Backup] Generando backup con:', {
-    config: cfg.length,
-    usuarios: usuarios.length,
-    areas: areas.length,
-    categorias: cats.length,
-    centros: centros.length,
-    facturas: facturas.length,
-    eventos: eventos.length
-  });
+  console.log('[Backup] Generando backup:', { tipo, config: cfg.length, usuarios: usuarios.length, facturas: facturas.length });
+
+  backupProgress.current = 8; backupProgress.message = 'Creando ZIP'; backupProgress.stage = 'zip';
 
   zip.addFile('backup.json', Buffer.from(JSON.stringify(data, null, 2), 'utf8'));
 
-  if (fs.existsSync(UPLOAD_DIR)) {
+  // Solo agregar uploads si es backup completo
+  if (tipo === 'completo' && fs.existsSync(UPLOAD_DIR)) {
     const files = fs.readdirSync(UPLOAD_DIR);
+    backupProgress.total = 10 + files.length;
+    backupProgress.current = 9; backupProgress.message = `Procesando archivos (0/${files.length})`; backupProgress.stage = 'uploads';
+    
     if (files.length > 0) {
       zip.addLocalFolder(UPLOAD_DIR, 'uploads');
     }
   }
+  
+  backupProgress.current = backupProgress.total; backupProgress.message = 'Completado'; backupProgress.stage = 'done';
 
   return zip;
 }
 
-// GET /api/backup — genera y descarga ZIP inmediatamente
+// GET /api/backup — dos pasos: generar y luego descargar
+// Paso 1: /api/backup?action=generate&tipo=config|completo -> devuelve filename
+// Paso 2: /api/backup?action=download&filename=xxx -> descarga el archivo
 router.get('/', soloAdmin, async (req, res) => {
-  try {
-    const zip = await generarZip();
-    const buffer = zip.toBuffer();
-    const fecha = new Date().toISOString().slice(0, 10);
-    const filename = `vitamar_backup_${fecha}.zip`;
+  const action = req.query.action;
+  const timestamp = Date.now();
 
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', buffer.length);
-    res.end(buffer);
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) {
+      fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    }
+
+    // Paso 2: Descargar archivo existente
+    if (action === 'download') {
+      const filename = req.query.filename;
+      if (!filename || !/^vitamar_backup_[\w\-]+\.zip$/.test(filename)) {
+        return res.status(400).json({ error: 'Nombre de archivo inválido' });
+      }
+      const filepath = path.join(BACKUP_DIR, filename);
+      if (!fs.existsSync(filepath)) {
+        return res.status(404).json({ error: 'Archivo no encontrado' });
+      }
+      return res.download(filepath, filename);
+    }
+
+    // Paso 1: Generar nuevo backup
+    const tipo = req.query.tipo === 'config' ? 'config' : 'completo';
+    console.log('[Backup] Generando backup tipo:', tipo);
+    
+    // Notify start
+    backupProgress = { total: 100, current: 10, message: 'Generando...', stage: 'generando' };
+    
+    const zip = await generarZip(tipo);
+    
+    const fecha = new Date().toISOString().slice(0, 10);
+    const filename = tipo === 'config' 
+      ? `vitamar_backup_config_${fecha}_${timestamp}.zip`
+      : `vitamar_backup_${fecha}_${timestamp}.zip`;
+
+    console.log('[Backup] Guardando:', filename);
+    
+    // Save to permanent location
+    const filepath = path.join(BACKUP_DIR, filename);
+    zip.writeZip(filepath);
+    
+    const size = fs.statSync(filepath).size;
+    console.log('[Backup] Guardado, size:', size);
+    
+    backupProgress = { total: 0, current: 0, message: '', stage: '' };
+    
+    // Instead of downloading, just return the filename so frontend can download
+    res.json({ ok: true, filename: filename, size: size, message: 'Backup generado. Descargando...' });
+    
   } catch (err) {
-    console.error('[Backup] Error:', err);
-    res.status(500).json({ error: 'Error generando backup: ' + err.message });
+    console.error('[Backup] Error:', err.message);
+    backupProgress = { total: 0, current: 0, message: '', stage: '' };
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Error generando backup: ' + err.message });
+    }
   }
+});
+
+// GET /api/backup/progreso — polling para progreso
+router.get('/progreso', soloAdmin, (req, res) => {
+  res.json(backupProgress);
 });
 
 // GET /api/backup/lista — lista backups en el servidor

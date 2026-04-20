@@ -61,37 +61,28 @@ router.post('/', requireRol('admin'), async (req, res) => {
 
 // PUT /api/usuarios/:id
 router.put('/:id', requireRol('admin'), async (req, res) => {
-  const { nombre, email, rol, area_id, activo, password } = req.body;
-  
   try {
-    // Normalizar area_id - si es string vacío, convertir a null
-    const areaIdValue = (area_id === '' || !area_id) ? null : area_id;
+    const { nombre, rol, area_id, activo, password } = req.body;
+    const userId = req.params.id;
     
-    // Construir query dinámicamente
-    const updates = ['nombre=$1', 'rol=$2', 'activo=$3'];
-    const values = [nombre?.trim(), rol, activo !== false];
+    let params = [nombre?.trim(), rol, !!activo];
+    let query = 'UPDATE usuarios SET nombre = $1, rol = $2, activo = $3';
     
-    // Agregar area_id como texto (PostgreSQL lo maneja mejor así)
-    if (areaIdValue) {
-      updates.push(`area_id=$${updates.length + 1}`);
-      values.push(areaIdValue);
+    if (area_id && area_id !== '') {
+      params.push(area_id);
+      query += ', area_id = $' + params.length;
     }
     
-    let query = `UPDATE usuarios SET ${updates.join(', ')}`;
-    
-    if (password && password.trim()) {
-      if (password.length < 8) {
-        return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
-      }
+    if (password && password.trim() && password.length >= 8) {
       const hash = await bcrypt.hash(password, 12);
-      updates.push(`password_hash=$${updates.length + 1}`);
-      values.push(hash);
+      params.push(hash);
+      query += ', password_hash = $' + params.length;
     }
     
-    values.push(req.params.id);
-    query += ` WHERE id=$${values.length} RETURNING id, nombre, email, rol, area_id, activo`;
+    params.push(userId);
+    query += ', actualizado_en = NOW() WHERE id = $' + params.length + ' RETURNING id, nombre, email, rol, area_id, activo';
     
-    const { rows } = await db.query(query, values);
+    const { rows } = await db.query(query, params);
     if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json(rows[0]);
   } catch (err) {

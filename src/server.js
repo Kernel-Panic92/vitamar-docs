@@ -48,16 +48,10 @@ app.get('/api/health', (req, res) => {
 app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/app.js', (req, res) => {
-  const file = path.join(__dirname, '../public/index.html');
-  const content = fs.readFileSync(file, 'utf8');
-  const start = content.indexOf('<script>') + 8;
-  const end = content.lastIndexOf('</body>');
-  const js = content.substring(start, end);
-  
+  const file = path.join(__dirname, '../public/app.js');
   res.setHeader('Content-Type', 'application/javascript');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Content-Length', Buffer.byteLength(js));
-  res.send(js);
+  res.sendFile(file);
 });
 
 app.get('*', (req, res) => {
