@@ -46,8 +46,8 @@ async function registrarEvento(client, facturaId, usuarioId, tipo, comentario = 
 function construirFiltroCategorias(usuario) {
   const { rol, categorias } = usuario;
   
-  // Admin, contador, auditor y comprador ven todo
-  if (['admin', 'contador', 'auditor', 'comprador'].includes(rol)) {
+  // Admin, contador, auditor, comprador y tesorero ven todo
+  if (['admin', 'contador', 'auditor', 'comprador', 'tesorero'].includes(rol)) {
     return null; // Sin filtro
   }
   

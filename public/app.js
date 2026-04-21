@@ -321,8 +321,9 @@ function stopSyncPoll(){
 
 // ─── FACTURAS ────────────────────────────────────────────────────────────────
 let fFiltro='todas';
-let fBusqueda=JSON.parse(localStorage.getItem('vd_filtros')||'{}');
-function initFiltros(){if(JSON.parse(localStorage.getItem('vd_filtros')||'{}').categoria_id)fBusqueda=JSON.parse(localStorage.getItem('vd_filtros'))}
+function getFiltrosKey(){return'vd_f_'+S.usuario?.id}
+let fBusqueda=JSON.parse(localStorage.getItem(getFiltrosKey())||'{}');
+function initFiltros(){const k=getFiltrosKey();const f=JSON.parse(localStorage.getItem(k)||'{}');if(f.categoria_id||f.proveedor_id)fBusqueda=f}
 
 async function rFacturas(filtro){
   if(filtro!==undefined)fFiltro=filtro;
@@ -430,7 +431,7 @@ function aplicarFiltrosF(){
   rFacturas();
 }
 function guardarFiltros(){
-  localStorage.setItem('vd_filtros',JSON.stringify(fBusqueda))}
+  localStorage.setItem(getFiltrosKey(),JSON.stringify(fBusqueda))}
 
 function limpiarFiltrosF(){
   fBusqueda={numero:'',nit:'',fecha_desde:'',fecha_hasta:'',valor_min:'',valor_max:'',proveedor_id:'',categoria_id:'',buscar:''};
