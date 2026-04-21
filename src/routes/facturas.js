@@ -44,15 +44,10 @@ async function registrarEvento(client, facturaId, usuarioId, tipo, comentario = 
 
 // ─── Helper: construir filtro de categorías por usuario ───────────────────────
 function construirFiltroCategorias(usuario) {
-  const { rol, area_id, categorias } = usuario;
+  const { rol, categorias } = usuario;
   
-  // Admin y contador ven todo
-  if (['admin', 'contador', 'auditor'].includes(rol)) {
-    return null; // Sin filtro
-  }
-  
-  // Comprador ve todas las facturas (puede buscar por proveedor y aprobar)
-  if (rol === 'comprador') {
+  // Admin, contador, auditor y comprador ven todo
+  if (['admin', 'contador', 'auditor', 'comprador'].includes(rol)) {
     return null; // Sin filtro
   }
   
@@ -61,12 +56,7 @@ function construirFiltroCategorias(usuario) {
     return categorias;
   }
   
-  // Si tiene área, obtener categorías del área
-  if (area_id) {
-    return 'AREA'; // Flag especial para indicar que se filtrará por área
-  }
-  
-  // Si no tiene nada, no ve facturas (devuelve array vacío)
+  // Si no tiene nada, no ve facturas
   return [];
 }
 
@@ -167,17 +157,10 @@ router.get('/', async (req, res) => {
   const filtroCats = construirFiltroCategorias(req.usuario);
   
   if (filtroCats === null) {
-    // Admin/contador/auditor ven todo - sin filtro adicional
+    // Admin/contador/auditor/comprador ven todo - sin filtro adicional
   } else if (filtroCats.length === 0) {
-    // Usuario sin acceso a categorías - no ve facturas
+    // Usuario sin acceso - no ve facturas
     return res.json({ data: [], total: 0, page: 1, limit: parseInt(limit) });
-  } else if (filtroCats === 'AREA') {
-    // Filtrar por categorías del área
-    where.push(`f.categoria_id IN (
-      SELECT ca.categoria_id FROM categoria_area ca 
-      WHERE ca.area_id = $${params.length + 1}
-    )`);
-    params.push(req.usuario.area_id);
   } else {
     // Filtrar por categorías explícitamente asignadas
     const placeholders = filtroCats.map((_, i) => `$${params.length + 1 + i}`).join(',');

@@ -535,7 +535,7 @@ async function mAprobar(id){
     </div>
     <div class="form-grid">
       <div class="field"><label>CENTRO DE OPERACIÓN *</label><select id="ap-centro"><option value="">— Seleccionar centro —</option>${co}</select></div>
-      <div class="field"><label>ÁREA DE DESTINO *</label><select id="ap-area"><option value="">— Seleccionar área —</option>${ao}</select></div>
+      <div class="field"><label>ÁREA DE DESTINO</label><select id="ap-area"><option value="">— Seleccionar área —</option>${ao}</select></div>
     </div>
     <div class="form-grid">
       <div class="field"><label>CENTRO DE COSTOS</label><input type="text" id="ap-cc" value="${esc(f.centro_costos||'')}" placeholder="Ej: CC-001"/></div>
@@ -551,10 +551,9 @@ async function doAprobar(id){
   const centro_id=$('ap-centro')?.value;
   const area_id=$('ap-area')?.value;
   if(!centro_id){toast('Selecciona el centro de operación','error');return}
-  if(!area_id){toast('Selecciona el área de destino','error');return}
   const b={
     centro_operacion_id:centro_id,
-    area_responsable_id:area_id,
+    ...(area_id && {area_responsable_id:area_id}),
     centro_costos:$('ap-cc')?.value?.trim()||null,
     descripcion_gasto:$('ap-desc')?.value?.trim()||null,
     referencia:$('ap-ref')?.value?.trim()||null,
