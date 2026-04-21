@@ -11,7 +11,19 @@ const COLS=['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EC4899','#F97316','#06B6D4
 const PASOS=[{id:'recepcion',l:'Recepción',d:'Sistema recibe'},{id:'revision',l:'Revisión',d:'Asigna CC'},{id:'aprobacion',l:'Aprobación',d:'Responsable'},{id:'causacion',l:'Causación',d:'Tesorería'},{id:'pagada',l:'Pagada',d:'Archivada'}];
 const EORD=['recibida','revision','aprobada','causada','pagada'];
 const EM={recibida:{l:'Recibida',c:'#60A5FA'},revision:{l:'En revisión',c:'#FBBF24'},aprobada:{l:'Aprobada',c:'#34D399'},causada:{l:'Causada',c:'#A78BFA'},rechazada:{l:'Rechazada',c:'#F87171'},pagada:{l:'Pagada',c:'#6EE7B7'}};
-const NAV=[{id:'dashboard',l:'Dashboard',i:'📊',s:'p'},{id:'facturas',l:'Facturas',i:'📄',s:'p'},{id:'pendientes',l:'Pendientes',i:'⏳',s:'f',w:true},{id:'aprobaciones',l:'Aprobaciones',i:'✓',s:'f'},{id:'causacion',l:'Causación',i:'📥',s:'f'},{id:'categorias',l:'Categorías',i:'🏷️',s:'c'},{id:'centros',l:'Centros',i:'🗺️',s:'c'},{id:'configuracion',l:'Configuración',i:'⚙️',s:'c',roles:['admin']},{id:'backup',l:'Backup',i:'💾',s:'c',roles:['admin']},{id:'usuarios',l:'Usuarios',i:'👤',s:'c',roles:['admin']},{id:'audit',l:'Auditoría',i:'🔒',s:'c',roles:['admin','auditor']}];
+const NAV=[
+  {id:'dashboard',l:'Dashboard',i:'📊',s:'p'},
+  {id:'facturas',l:'Facturas',i:'📄',s:'p'},
+  {id:'pendientes',l:'Pendientes',i:'⏳',s:'f',w:true,roles:['admin','contador','comprador']},
+  {id:'aprobaciones',l:'Aprobaciones',i:'✓',s:'f',roles:['admin','contador','comprador']},
+  {id:'causacion',l:'Causación',i:'📥',s:'f',roles:['admin','contador','tesorero']},
+  {id:'categorias',l:'Categorías',i:'🏷️',s:'c',roles:['admin','contador']},
+  {id:'centros',l:'Centros',i:'🗺️',s:'c',roles:['admin','contador']},
+  {id:'configuracion',l:'Configuración',i:'⚙️',s:'c',roles:['admin']},
+  {id:'backup',l:'Backup',i:'💾',s:'c',roles:['admin']},
+  {id:'usuarios',l:'Usuarios',i:'👤',s:'c',roles:['admin']},
+  {id:'audit',l:'Auditoría',i:'🔒',s:'c',roles:['admin','auditor']}
+];
 const SECS=[{id:'p',l:'Principal'},{id:'f',l:'Flujo'},{id:'c',l:'Config'}];
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
