@@ -7,36 +7,39 @@ router.use(authMiddleware);
 // GET /api/dashboard
 router.get('/', async (req, res) => {
   try {
-    const [estados, porCategoria, porArea, vencimientos, recientes] = await Promise.all([
+    const rol = req.usuario.rol;
+    const esComprador = rol === 'comprador';
+    const esTesorero = rol === 'tesorero';
+    const esAdmin = ['admin', 'contador', 'auditor'].includes(rol);
 
-      // Conteo por estado
-      db.query(`
-        SELECT estado, COUNT(*)::int AS total, SUM(valor_total)::numeric AS valor
-        FROM facturas
-        GROUP BY estado
-      `),
+    const [estados, porCategoria, vencimientos, recientes, valorMes] = await Promise.all([
 
-      // Por categoría (top 5)
-      db.query(`
-        SELECT c.nombre, c.color, COUNT(f.id)::int AS total
-        FROM categorias_compra c
-        LEFT JOIN facturas f ON f.categoria_id = c.id
-        WHERE c.activo = TRUE
-        GROUP BY c.id
-        ORDER BY total DESC
-        LIMIT 5
-      `),
+      // Conteo por estado (solo pendientes si es comprador)
+      esComprador 
+        ? db.query(`
+            SELECT estado, COUNT(*)::int AS total
+            FROM facturas
+            WHERE estado IN ('recibida','revision')
+            GROUP BY estado
+          `)
+        : db.query(`
+            SELECT estado, COUNT(*)::int AS total
+            FROM facturas
+            GROUP BY estado
+          `),
 
-      // Por área (pendientes)
-      db.query(`
-        SELECT a.nombre, COUNT(f.id)::int AS pendientes
-        FROM areas a
-        LEFT JOIN facturas f ON f.area_responsable_id = a.id
-          AND f.estado IN ('recibida','revision')
-        WHERE a.activo = TRUE
-        GROUP BY a.id
-        ORDER BY pendientes DESC
-      `),
+      // Por categoría (top 5) - solo si no es comprador
+      esComprador
+        ? Promise.resolve({ rows: [] })
+        : db.query(`
+            SELECT c.nombre, c.color, COUNT(f.id)::int AS total
+            FROM categorias_compra c
+            LEFT JOIN facturas f ON f.categoria_id = c.id
+            WHERE c.activo = TRUE
+            GROUP BY c.id
+            ORDER BY total DESC
+            LIMIT 5
+          `),
 
       // Próximas a vencer (límite pago en los próximos 7 días)
       db.query(`
@@ -62,36 +65,43 @@ router.get('/', async (req, res) => {
         ORDER BY f.recibida_en DESC
         LIMIT 8
       `),
+
+      // Valor causado en el mes actual
+      db.query(`
+        SELECT COALESCE(SUM(valor_total), 0)::numeric AS valor
+        FROM facturas
+        WHERE estado IN ('causada','pagada')
+          AND DATE_TRUNC('month', actualizada_en) = DATE_TRUNC('month', NOW())
+      `),
     ]);
 
-    // Resumen global
+    // Resumen
     const resumen = {
-      total:     0,
+      total: 0,
       recibidas: 0,
-      revision:  0,
+      revision: 0,
       aprobadas: 0,
-      causadas:  0,
-      pagadas:   0,
-      rechazadas:0,
-      valor_mes: 0,
+      causadas: 0,
+      pagadas: 0,
+      rechazadas: 0,
+      valor_mes: parseFloat(valorMes.rows[0]?.valor || 0),
     };
     for (const row of estados.rows) {
       resumen.total += row.total;
-      if (row.estado === 'recibida')   resumen.recibidas  = row.total;
-      if (row.estado === 'revision')   resumen.revision   = row.total;
-      if (row.estado === 'aprobada')   resumen.aprobadas  = row.total;
-      if (row.estado === 'causada')    resumen.causadas   = row.total;
-      if (row.estado === 'pagada')     resumen.pagadas    = row.total;
-      if (row.estado === 'rechazada')  resumen.rechazadas = row.total;
-      resumen.valor_mes += parseFloat(row.valor || 0);
+      if (row.estado === 'recibida') resumen.recibidas = row.total;
+      if (row.estado === 'revision') resumen.revision = row.total;
+      if (row.estado === 'aprobada') resumen.aprobadas = row.total;
+      if (row.estado === 'causada') resumen.causadas = row.total;
+      if (row.estado === 'pagada') resumen.pagadas = row.total;
+      if (row.estado === 'rechazada') resumen.rechazadas = row.total;
     }
 
     res.json({
+      rol,
       resumen,
       por_categoria: porCategoria.rows,
-      por_area:      porArea.rows,
-      vencimientos:  vencimientos.rows,
-      recientes:     recientes.rows,
+      vencimientos: vencimientos.rows,
+      recientes: recientes.rows,
     });
 
   } catch (err) {

@@ -224,28 +224,39 @@ async function refreshBadges(){
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 async function rDash(){
-  const f=await api('GET','/facturas?limit=100');const all=f.data||[];
-  const por=s=>all.filter(x=>x.estado===s).length;
-  const vc=all.filter(x=>x.estado==='causada'||x.estado==='pagada').reduce((a,x)=>a+parseFloat(x.valor_total||0),0);
+  const d=await api('GET','/dashboard');
+  const r=d.resumen;
+  const rol=S.usuario?.rol;
+  const esComprador=rol==='comprador';
+  const esTesorero=['tesorero'].includes(rol);
   const sync=await checkSyncStatus();
   if(sync.sincronizando){
     startSyncPoll();
   }else{
     stopSyncPoll();
   }
+  let stats='';
+  if(esComprador){
+    stats+=stat('Pendientes aprobar',r.recibidas+r.revision,'var(--accent2)','orange');
+  }else if(esTesorero){
+    stats+=stat('Por causar',r.aprobadas,'var(--success)','green');
+    stats+=stat('Por pagar',r.causadas,'var(--accent)','blue');
+    stats+=stat('Valor mes',fmt(r.valor_mes),'var(--warning)','yellow');
+  }else{
+    stats+=stat('Recibidas',r.recibidas,'var(--accent)','blue');
+    stats+=stat('En revisión',r.revision,'var(--accent2)','orange');
+    stats+=stat('Por causar',r.aprobadas,'var(--success)','green');
+    stats+=stat('Valor mes',fmt(r.valor_mes),'var(--warning)','yellow');
+  }
+  const rc=d.recientes||[];
   $('content').innerHTML=`
-    <div class="page-header"><div><div class="page-title">Dashboard</div><div class="page-sub">Resumen general del sistema</div></div></div>
-    ${sync.bar}
-    <div class="stats-row">
-      ${stat('Total facturas',all.length,'var(--accent)','blue')}
-      ${stat('En revisión',por('revision'),'var(--accent2)','orange')}
-      ${stat('Por causar',por('aprobada'),'var(--success)','green')}
-      ${stat('Valor causado',fmt(vc),'var(--warning)','yellow')}
-    </div>
+    <div class="page-header"><div><div class="page-title">Dashboard</div><div class="page-sub">${esTesorero?'Gestión de pagos':esComprador?'Facturas por aprobar':'Resumen general'}</div></div></div>
+    ${!esComprador?sync.bar:''}
+    <div class="stats-row">${stats}</div>
     <div class="tbl">
       <div class="tbl-head"><div class="tbl-title">Actividad reciente</div><button class="btn btn-primary btn-sm" onclick="mNuevaF()">+ Nueva</button></div>
       <table><thead><tr><th># Factura</th><th>Proveedor</th><th>Categoría</th><th>Valor</th><th>Estado</th><th>Recibida</th><th></th></tr></thead>
-      <tbody>${all.slice(0,10).map(f=>`<tr onclick="abrirF('${f.id}')"><td class="mono">${esc(f.numero_factura)}</td><td style="font-weight:500">${esc(f.proveedor_nombre||'—')}</td><td>${ctag(f.categoria_color,f.categoria_nombre)}</td><td style="font-weight:500">${fmt(f.valor_total||f.valor||0)}</td><td>${bdg(f.estado)}</td><td style="color:var(--muted);font-size:12px">${fdatetime(f.recibida_en)}</td><td>${f.archivo_pdf?`<span onclick="event.stopPropagation();verPdf('${f.id}')" title="Ver PDF" style="color:var(--accent);font-size:16px;cursor:pointer">📄</span>`:''}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">Sin facturas</td></tr>'}</tbody></table>
+      <tbody>${rc.length?rc.map(f=>`<tr onclick="abrirF('${f.id}')"><td class="mono">${esc(f.numero_factura)}</td><td style="font-weight:500">${esc(f.proveedor_nombre||'—')}</td><td>${ctag(f.categoria_color,f.categoria_nombre)}</td><td style="font-weight:500">${fmt(f.valor_total||f.valor||0)}</td><td>${bdg(f.estado)}</td><td style="color:var(--muted);font-size:12px">${fdatetime(f.recibida_en)}</td><td>${f.archivo_pdf?`<span onclick="event.stopPropagation();verPdf('${f.id}')" title="Ver PDF" style="color:var(--accent);font-size:16px;cursor:pointer">📄</span>`:''}</td></tr>`).join(''):'<tr><td colspan="7" class="empty">Sin facturas</td></tr>'}</tbody></table>
     </div>`;
   refreshBadges();
 }
