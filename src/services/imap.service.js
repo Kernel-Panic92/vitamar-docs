@@ -429,8 +429,8 @@ async function pollCorreo(rescanAll = false) {
         mensajes = mensajes.slice(-500);
         console.log(`[IMAP] Rescan: ${mensajes.length} mensajes (últimos 500)`);
       } else {
-        mensajes = await client.search({ seen: false });
-        console.log(`[IMAP] ${mensajes.length} mensaje(s) no leídos encontrados`);
+        mensajes = await client.search({ all: true });
+        console.log(`[IMAP] Procesando todos los ${mensajes.length} mensaje(s) del buzón`);
       }
       
       if (mensajes.length === 0) {
