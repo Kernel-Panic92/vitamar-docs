@@ -325,7 +325,10 @@ function stopSyncPoll(){
 let fFiltro='todas';
 function getFiltrosKey(){return'vd_f_'+S.usuario?.id}
 let fBusqueda=JSON.parse(localStorage.getItem(getFiltrosKey())||'{}');
-function initFiltros(){const k=getFiltrosKey();const f=JSON.parse(localStorage.getItem(k)||'{}');if(f.categoria_id||f.proveedor_id)fBusqueda=f}
+// Ensure date fields are never undefined
+fBusqueda.fecha_desde=fBusqueda.fecha_desde||'';
+fBusqueda.fecha_hasta=fBusqueda.fecha_hasta||'';
+function initFiltros(){const k=getFiltrosKey();const f=JSON.parse(localStorage.getItem(k)||'{}');f.fecha_desde=f.fecha_desde||'';f.fecha_hasta=f.fecha_hasta||'';if(f.categoria_id||f.proveedor_id)fBusqueda=f}
 
 async function rFacturas(filtro){
   if(filtro!==undefined)fFiltro=filtro;
