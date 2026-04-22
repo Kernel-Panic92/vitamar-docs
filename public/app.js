@@ -673,7 +673,7 @@ async function mCat(id){
   const form=cat?{nombre:cat.nombre,desc:cat.descripcion||'',color:cat.color||'#3B82F6',pasos:[...(cat.pasos||[])]}:{nombre:'',desc:'',color:'#3B82F6',pasos:['recepcion','revision','aprobacion','causacion']};
   function rr(){
     const cp=$('cp');if(cp)cp.innerHTML=COLS.map(c=>`<div class="cd${form.color===c?' sel':''}" style="background:${c}" onclick="sCo('${c}')"></div>`).join('');
-    const cpa=$('cpa');if(cpa)cpa.innerHTML=PASOS.map(p=>{const s=form.pasos.includes(p.id);const f=p.id==='recepcion';return`<div class="ci${s&&!f?' sel':''}" ${f?'':'onclick="tP(\\''+p.id+'\')"'}><div class="cb${s&&!f?' sel':''}">${s&&!f?'✓':''}</div><div style="flex:1"><span style="font-size:13px">${p.l}</span></div>${f?'<span class="tag">oblig</span>':''}</div>`}).join('');
+    const cpa=$('cpa');if(cpa)cpa.innerHTML=PASOS.map(p=>{const s=form.pasos.includes(p.id);const f=p.id==='recepcion';const onclickAttr=f?'':'onclick="tP(\''+p.id+'\')"';const checked=s&&!f?' sel':''; return`<div class="ci${checked}" ${onclickAttr}><div class="cb${checked}">${s&&!f?'✓':''}</div><div style="flex:1"><span style="font-size:13px">${p.l}</span></div>${f?'<span class="tag">oblig</span>':''}</div>`}).join('');
   }
   window.sCo=c=>{form.color=c;rr()};
   window.tP=pid=>{form.pasos=form.pasos.includes(pid)?form.pasos.filter(x=>x!==pid):[...form.pasos,pid];rr()};
