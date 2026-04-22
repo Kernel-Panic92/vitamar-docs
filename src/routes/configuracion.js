@@ -355,14 +355,8 @@ router.post('/updater/update', requireRol('admin'), async (req, res) => {
       execSync('git fetch origin release && git checkout release && git pull origin release', { cwd: APP_DIR, stdio: 'pipe' });
       logUpdater('2b. Rama release - sin cambios locales');
     } else {
-      try {
-        execSync('git pull origin ' + branch, { cwd: APP_DIR, stdio: 'pipe' });
-      } catch (e) {
-        execSync('git fetch origin && git reset --hard origin/' + branch, { cwd: APP_DIR, stdio: 'pipe' });
-      }
-      
-      logUpdater('5. Restaurando cambios locales...');
-      execSync('git stash pop 2>/dev/null || true', { cwd: APP_DIR, stdio: 'pipe' });
+      execSync('git fetch origin && git reset --hard origin/' + branch, { cwd: APP_DIR, stdio: 'pipe' });
+      logUpdater('2b. Reset hard completado - sin conflictos');
     }
     
     logUpdater('3. Instalando dependencias...');
@@ -380,9 +374,6 @@ router.post('/updater/update', requireRol('admin'), async (req, res) => {
     } catch (e) {
       logUpdater(`Migraciones: ${e.message}`);
     }
-    
-    logUpdater('5. Restaurando cambios locales...');
-    execSync('git stash pop 2>/dev/null || true', { cwd: APP_DIR, stdio: 'pipe' });
     
     const newCommit = execSync('git rev-parse --short HEAD', { cwd: APP_DIR }).toString().trim();
     
