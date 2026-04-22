@@ -19,6 +19,11 @@ Fecha: 2026-04-23
   - /configuracion/imap/test, /smtp/test
   - /usuarios/simple
   - Descarga de PDFs y soporte de pago
+- ✅ **SEGURIDAD**: Previene command injection:
+  - Validación de expresiones cron
+  - Sanitización de argumentos shell
+  - Validación de valores numéricos en rangos seguros
+- ✅ **SEGURIDAD**: Manejo seguro de errores - oculta detalles en producción
 
 ### Limpieza de código
 - ✅ Eliminado módulo Aprobaciones (redundante con Pendientes)
