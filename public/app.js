@@ -478,7 +478,6 @@ async function rCaus(){
 // ─── FACTURA DETALLE ─────────────────────────────────────────────────────────
 async function abrirF(id){
   const f=await api('GET',`/facturas/${id}`);
-  if(!S.areas?.length)S.areas=await api('GET','/areas');
   if(!S.cats?.length)S.cats=await api('GET','/categorias');
   const catsPref=f.proveedor_id?(await api('GET',`/proveedores/${f.proveedor_id}/categorias-preferidas`)||[]):[];
   const ei=EORD.indexOf(f.estado);
@@ -498,14 +497,13 @@ async function abrirF(id){
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">NIT</div><div style="font-weight:600;margin-top:4px">${esc(f.nit_emisor||f.proveedor_nit||'—')}</div></div>
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Valor total</div><div style="font-weight:700;font-size:18px;margin-top:4px">${fmt(f.valor_total||0)}</div></div>
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">IVA</div><div style="font-weight:600;margin-top:4px">${fmt(f.valor_iva||0)}</div></div>
-      <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Fecha</div><div style="font-weight:500;margin-top:4px">${fdate(f.fecha_factura||f.recibida_en)}</div></div>
+      <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Fecha factura</div><div style="font-weight:500;margin-top:4px">${fdate(f.fecha_factura||f.recibida_en)}</div></div>
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Estado</div><div style="margin-top:4px">${bdg(f.estado)}</div></div>
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Centro operacion</div><div style="font-weight:600;margin-top:4px">${esc(f.centro_operacion_nombre||'—')}</div></div>
-      <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Area</div><div style="font-weight:500;margin-top:4px">${esc(f.area_nombre||'—')}</div></div>
-      <div style="grid-column:1/-1;background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Categoria</div><select id="fc-cat" style="margin-top:4px;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:100%" onchange="cambiarCat('${id}',this.value)"><option value="">- Seleccionar categoria -</option>${S.cats.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(c=>`<option value="${c.id}" ${f.categoria_id===c.id?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select>${catsPref.length?`<div style="font-size:11px;color:var(--muted);margin-top:8px">Mas usadas: ${catsPref.map(cp=>`<span onclick="cambiarCat('${id}','${ cp.id}')" style="cursor:pointer;padding:4px 8px;background:var(--surface);border-radius:4px;font-size:12px;margin-right:4px">${esc(cp.nombre)} (${cp.contador})</span>`).join('')}</div>`:''}</div>
+      <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Limite pago</div><div style="font-weight:600;margin-top:4px;color:${f.limite_pago&&new Date(f.limite_pago)<new Date()?'var(--danger)':'var(--text)'}">${fdate(f.limite_pago||'—')}</div></div>
       ${f.centro_costos?`<div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Centro costos</div><div style="font-weight:600;margin-top:4px">${esc(f.centro_costos)}</div></div>`:''}
+      <div style="grid-column:1/-1;background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Categoria</div><select id="fc-cat" style="margin-top:4px;padding:6px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:100%" onchange="cambiarCat('${id}',this.value)"><option value="">- Seleccionar categoria -</option>${S.cats.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(c=>`<option value="${c.id}" ${f.categoria_id===c.id?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select>${catsPref.length?`<div style="font-size:11px;color:var(--muted);margin-top:8px">Mas usadas: ${catsPref.map(cp=>`<span onclick="cambiarCat('${id}','${cp.id}')" style="cursor:pointer;padding:4px 8px;background:var(--surface);border-radius:4px;font-size:12px;margin-right:4px">${esc(cp.nombre)} (${cp.contador})</span>`).join('')}</div>`:''}</div>
       ${f.descripcion_gasto?`<div style="grid-column:1/-1;background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Descripcion</div><div style="margin-top:4px">${esc(f.descripcion_gasto)}</div></div>`:''}
-      ${f.limite_pago?`<div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase">Limite pago</div><div style="font-weight:600;margin-top:4px;color:${new Date(f.limite_pago)<new Date()?'var(--danger)':'var(--success)'}">${fdate(f.limite_pago)} ${new Date(f.limite_pago)<new Date()?'(vencida)':''}</div></div>`:''}
     </div>
     <div style="margin-bottom:16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:12px">Progreso</div><div style="display:flex;align-items:center;overflow-x:auto">${prog}</div></div>
     <div class="modal-footer">${f.archivo_pdf?`<button onclick="verPdf('${id}')" class="btn btn-secondary btn-sm">PDF</button>`:''}<button class="btn btn-secondary btn-sm" onclick="closeM()">Cerrar</button>${acc.join('')}</div>`,640);
@@ -514,7 +512,6 @@ async function abrirF(id){
 async function mAprobar(id){
   const f=await api('GET',`/facturas/${id}`);
   if(!S.centros)S.centros=await api('GET','/centros');
-  const ao=S.areas.map(a=>`<option value="${a.id}" ${f.area_responsable_id===a.id?'selected':''}>${esc(a.nombre)}</option>`).join('');
   const co=S.centros.map(c=>`<option value="${c.id}" ${f.centro_operacion_id===c.id?'selected':''}>${esc(c.nombre)}</option>`).join('');
   showM('Aprobar factura',`
     <div style="margin-bottom:16px;padding:12px;background:rgba(79,142,247,.1);border-radius:8px">
@@ -523,10 +520,7 @@ async function mAprobar(id){
       <div style="font-size:14px;margin-top:4px">${esc(f.proveedor_nombre||f.nombre_emisor||'—')}</div>
       <div style="font-size:20px;font-weight:700;color:var(--accent);margin-top:8px">${fmt(f.valor_total||0)}</div>
     </div>
-    <div class="form-grid">
-      <div class="field"><label>CENTRO DE OPERACION *</label><select id="ap-centro"><option value="">- Seleccionar -</option>${co}</select></div>
-      <div class="field"><label>AREA</label><select id="ap-area"><option value="">- Seleccionar -</option>${ao}</select></div>
-    </div>
+    <div class="field"><label>CENTRO DE OPERACION *</label><select id="ap-centro"><option value="">- Seleccionar -</option>${co}</select></div>
     <div class="form-grid">
       <div class="field"><label>CENTRO DE COSTOS</label><input type="text" id="ap-cc" value="${esc(f.centro_costos||'')}"/></div>
       <div class="field"><label>REFERENCIA</label><input type="text" id="ap-ref" value="${esc(f.orden_compra||f.referencia||'')}"/></div>
@@ -538,11 +532,9 @@ async function mAprobar(id){
 
 async function doAprobar(id){
   const centro_id=$('ap-centro')?.value;
-  const area_id=$('ap-area')?.value;
   if(!centro_id){toast('Selecciona el centro de operacion','error');return}
   const b={
     centro_operacion_id:centro_id,
-    ...(area_id && {area_responsable_id:area_id}),
     centro_costos:$('ap-cc')?.value?.trim()||null,
     descripcion_gasto:$('ap-desc')?.value?.trim()||null,
     referencia:$('ap-ref')?.value?.trim()||null
