@@ -404,12 +404,7 @@ async function pollCorreo(rescanAll = false) {
       user: config.imap_user,
       pass: config.imap_password,
     },
-    logger: {
-      debug: (msg) => console.log('[IMAP DEBUG]', msg),
-      info:  (msg) => console.log('[IMAP INFO]', msg),
-      warn:  (msg) => console.warn('[IMAP WARN]', msg),
-      error: (msg) => console.error('[IMAP ERROR]', msg),
-    },
+    logger: false, // Desactivado para evitar filtrar credenciales en logs
   });
 
   const LOTE_SIZE = 50;

@@ -1,3 +1,12 @@
+// Placeholder hash para usuarios NO restaurados del backup
+// El hash real es válido pero no conocemos la contraseña original
+// Por seguridad, forzamos cambio de contraseña en próximo login
+const PLACEHOLDER_HASH = '$2a$12$placeholder.for.backup.only.do.not.use';
+
+function requirePasswordReset(hash) {
+  return hash === PLACEHOLDER_HASH;
+}
+
 const router = require('express').Router();
 const path   = require('path');
 const fs     = require('fs');
@@ -300,11 +309,11 @@ router.post('/restore', soloAdmin, upload.single('backup'), async (req, res) => 
         if (u.email === req.usuario.email) continue;
         const hash = u.password_hash && u.password_hash !== '(backup_excluded)' 
           ? u.password_hash 
-          : '$2a$12$placeholder.for.backup.only.do.not.use';
+          : PLACEHOLDER_HASH;
         await client.query(
           `INSERT INTO usuarios (id, nombre, email, password_hash, rol, area_id, activo, cambio_password, creado_en, actualizado_en)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-           ON CONFLICT (id) DO UPDATE SET nombre=$2, email=$3, password_hash=COALESCE(NULLIF($4, '$2a$12$placeholder.for.backup.only.do.not.use'), usuarios.password_hash), rol=$5, area_id=$6, activo=$7, cambio_password=$8, actualizado_en=NOW()`,
+           ON CONFLICT (id) DO UPDATE SET nombre=$2, email=$3, password_hash=COALESCE(NULLIF($4, PLACEHOLDER_HASH), usuarios.password_hash), rol=$5, area_id=$6, activo=$7, cambio_password=$8, actualizado_en=NOW()`,
           [u.id, u.nombre, u.email, hash, u.rol, u.area_id, u.activo ?? true, u.cambio_password ?? false, u.creado_en]
         );
       }
@@ -406,11 +415,11 @@ router.post('/restore/local/:filename', soloAdmin, (req, res) => {
           if (u.email === req.usuario.email) continue;
           const hash = u.password_hash && u.password_hash !== '(backup_excluded)' 
             ? u.password_hash 
-            : '$2a$12$placeholder.for.backup.only.do.not.use';
+            : PLACEHOLDER_HASH;
           await db.query(
             `INSERT INTO usuarios (id, nombre, email, password_hash, rol, area_id, activo, cambio_password, creado_en, actualizado_en)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-             ON CONFLICT (id) DO UPDATE SET nombre=$2, email=$3, password_hash=COALESCE(NULLIF($4, '$2a$12$placeholder.for.backup.only.do.not.use'), usuarios.password_hash), rol=$5, area_id=$6, activo=$7, cambio_password=$8, actualizado_en=NOW()`,
+             ON CONFLICT (id) DO UPDATE SET nombre=$2, email=$3, password_hash=COALESCE(NULLIF($4, PLACEHOLDER_HASH), usuarios.password_hash), rol=$5, area_id=$6, activo=$7, cambio_password=$8, actualizado_en=NOW()`,
             [u.id, u.nombre, u.email, hash, u.rol, u.area_id, u.activo ?? true, u.cambio_password ?? false, u.creado_en]
           );
         }
