@@ -14,6 +14,11 @@ Fecha: 2026-04-23
 - ✅ Fix updater: usa `reset --hard` para evitar conflictos de merge al actualizar desde UI
 - ✅ CRON jobs deshabilitados (pendiente integración API DIAN)
 - ✅ Arreglado error de fechas undefined en filtros de facturas
+- ✅ **SEGURIDAD**: Agregado authMiddleware a todas las rutas vulnerables:
+  - /facturas/* (todas las rutas)
+  - /configuracion/imap/test, /smtp/test
+  - /usuarios/simple
+  - Descarga de PDFs y soporte de pago
 
 ### Limpieza de código
 - ✅ Eliminado módulo Aprobaciones (redundante con Pendientes)
