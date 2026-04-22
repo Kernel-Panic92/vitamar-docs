@@ -441,57 +441,52 @@ function limpiarFiltrosF(){
   rFacturas();
 }
 
-// ─── PENDIENTES ──────────────────────────────────────────────────────────────
+let pendBusqueda='';
 async function rPend(){
-  const f=await api('GET','/facturas/pendientes');const all=f.data||[];
-  const criticas=all.filter(x=>x.prioridad==='critico');
-  const alertas=all.filter(x=>x.prioridad==='alerta');
-  const normales=all.filter(x=>x.prioridad==='normal');
+  pendBusqueda=$('pend-buscar')?.value||'';
+  const [r1,r2,r3]=await Promise.all([
+    api('GET','/facturas?estado=recibida&limit=100'),
+    api('GET','/facturas?estado=revision&limit=100'),
+    api('GET','/facturas?estado=causada&limit=100')
+  ]);
+  let all=[...(r1.data||[]),...(r2.data||[]),...(r3.data||[])];
+  if(pendBusqueda){
+    const b=pendBusqueda.toLowerCase();
+    all=all.filter(x=>(x.numero_factura||'').toLowerCase().includes(b)||(x.proveedor_nombre||'').toLowerCase().includes(b));
+  }
+  const porAprobar=all.filter(x=>['recibida','revision'].includes(x.estado));
+  const porVencer=all.filter(x=>x.limite_pago&&new Date(x.limite_pago)<=new Date(Date.now()+7*24*60*60*1000)&&!['recibida','revision'].includes(x.estado));
+  const porPagar=all.filter(x=>x.estado==='causada');
   
-  function renderItem(f){
-    const badge=f.prioridad==='critico'?'<span class="badge" style="background:rgba(248,113,113,.2);color:#f7614f">🔴 Crítico</span>':
-                 f.prioridad==='alerta'?'<span class="badge" style="background:rgba(251,191,36,.2);color:#f7d44f">🟡 Alerta</span>':bdg(f.estado);
-    const tipoBadge=f.tipo_urgencia==='dian'?'<span class="badge b-revision">DIAN</span>':
-                    f.tipo_urgencia==='soporte'?'<span class="badge b-causada">Sin soporte</span>':
-                    f.tipo_urgencia==='revision'?'<span class="badge b-recibida">Sin revisar</span>':'';
-    return `<div class="tbl" style="cursor:pointer;padding:16px 20px;display:flex;align-items:center;gap:20px;border-left:4px solid ${f.prioridad==='critico'?'var(--danger)':f.prioridad==='alerta'?'var(--warning)':f.estado==='causada'?'#A78BFA':'var(--accent)'}" onclick="abrirF('${f.id}')">
-      <div style="flex:1"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono">${esc(f.numero_factura)}</span>${badge}${tipoBadge}</div>
+  function renderItem(f,color){
+    const vencio=f.limite_pago&&new Date(f.limite_pago)<new Date();
+    return `<div class="tbl" style="cursor:pointer;padding:16px 20px;display:flex;align-items:center;gap:20px;border-left:4px solid ${color}" onclick="abrirF('${f.id}')">
+      <div style="flex:1"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono">${esc(f.numero_factura)}</span>${bdg(f.estado)}</div>
       <div style="font-weight:500;margin-bottom:4px">${esc(f.proveedor_nombre||'Desconocido')}</div>
-      <div style="font-size:12px;color:var(--muted)">${esc(f.area_nombre||'Sin área')} · Recibida: ${fdatetime(f.recibida_en)}</div></div>
-      <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:8px"><div style="font-size:18px;font-weight:700">${fmt(f.valor_total||f.valor||0)}</div>${f.archivo_pdf?`<button onclick="event.stopPropagation();verPdf('${f.id}')" class="btn btn-secondary btn-sm">📄 PDF</button>`:''}${f.limite_pago?`<div style="font-size:12px;color:${new Date(f.limite_pago)<new Date()?'var(--danger)':f.prioridad==='alerta'?'var(--warning)':'var(--muted)'}">Vence: ${fdate(f.limite_pago)}</div>`:f.limite_dian?`<div style="font-size:12px;color:${f.prioridad==='critico'?'var(--danger)':'var(--muted)'}">DIAN: ${fdate(f.limite_dian)}</div>`:''}</div>
+      <div style="font-size:12px;color:var(--muted)">${esc(f.centro_operacion_nombre||'Sin CO')} · Recibida: ${fdatetime(f.recibida_en)}</div></div>
+      <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:8px"><div style="font-size:18px;font-weight:700">${fmt(f.valor_total||f.valor||0)}</div>${f.archivo_pdf?`<button onclick="event.stopPropagation();verPdf('${f.id}')" class="btn btn-secondary btn-sm">📄 PDF</button>`:''}${f.limite_pago?`<div style="font-size:12px;color:${vencio?'var(--danger)':'var(--muted)'}">Vence: ${fdate(f.limite_pago)}</div>`:''}</div>
     </div>`;
   }
   
   $('content').innerHTML=`
-    <div class="page-header"><div><div class="page-title">Pendientes</div><div class="page-sub">${all.length} factura(s) requieren atención</div></div></div>
-    ${criticas.length?`<div style="margin-bottom:20px">
-      <div style="font-size:11px;text-transform:uppercase;color:var(--danger);font-weight:600;margin-bottom:10px">🔴 Críticas (vencen pronto)</div>
-      ${criticas.map(renderItem).join('')}
+    <div class="page-header"><div><div class="page-title">Pendientes</div><div class="page-sub">${all.length} factura(s)</div></div></div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
+      <input type="text" id="pend-buscar" placeholder="Buscar por # factura o proveedor..." value="${esc(pendBusqueda)}" onkeydown="if(event.key==='Enter')rPend()" style="width:100%">
+    </div>
+    ${porAprobar.length?`<div style="margin-bottom:20px">
+      <div style="font-size:11px;text-transform:uppercase;color:#f97316;font-weight:600;margin-bottom:10px">🟠 Por aprobar (${porAprobar.length})</div>
+      ${porAprobar.map(f=>renderItem(f,'#f97316')).join('')}
     </div>`:''}
-    ${alertas.length?`<div style="margin-bottom:20px">
-      <div style="font-size:11px;text-transform:uppercase;color:var(--warning);font-weight:600;margin-bottom:10px">🟡 Alertas</div>
-      ${alertas.map(renderItem).join('')}
+    ${porVencer.length?`<div style="margin-bottom:20px">
+      <div style="font-size:11px;text-transform:uppercase;color:var(--danger);font-weight:600;margin-bottom:10px">🔴 Próximas a vencer (${porVencer.length})</div>
+      ${porVencer.map(f=>renderItem(f,'var(--danger)')).join('')}
     </div>`:''}
-    ${normales.length?`<div>
-      <div style="font-size:11px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:10px">Pendientes</div>
-      ${normales.map(renderItem).join('')}
+    ${porPagar.length?`<div style="margin-bottom:20px">
+      <div style="font-size:11px;text-transform:uppercase;color:#A78BFA;font-weight:600;margin-bottom:10px">🟣 Por pagar (${porPagar.length})</div>
+      ${porPagar.map(f=>renderItem(f,'#A78BFA')).join('')}
     </div>`:''}
     ${all.length===0?'<div class="empty">No hay facturas pendientes ✓</div>':''}
   `;
-}
-
-// ─── APROBACIONES ───────────────────────────────────────────────────────────
-async function rAprob(){
-  const f=await api('GET','/facturas?estado=recibida&limit=100');const f2=await api('GET','/facturas?estado=revision&limit=100');
-  const all=[...f.data||[],...f2.data||[]];
-  $('content').innerHTML=`
-    <div class="page-header"><div><div class="page-title">Aprobaciones</div><div class="page-sub">${all.length} factura(s) por aprobar</div></div></div>
-    <div style="display:grid;gap:12px">${all.length?all.map(f=>`<div class="tbl" style="cursor:pointer;padding:16px 20px;display:flex;align-items:center;gap:20px" onclick="abrirF('${f.id}')">
-      <div style="flex:1"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono">${esc(f.numero_factura)}</span>${bdg(f.estado)}</div>
-      <div style="font-weight:500;margin-bottom:4px">${esc(f.proveedor_nombre||'Desconocido')}</div>
-      <div style="font-size:12px;color:var(--muted)">${ctag(f.categoria_color,f.categoria_nombre)} · ${esc(f.area_nombre||'Sin área')}</div></div>
-      <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:8px"><div style="font-size:18px;font-weight:700">${fmt(f.valor_total||f.valor||0)}</div>${f.archivo_pdf?`<button onclick="event.stopPropagation();verPdf('${f.id}')" class="btn btn-secondary btn-sm">📄 PDF</button>`:''}<div class="btn btn-primary btn-sm">Revisar</div></div>
-    </div>`).join(''):'<div class="empty">No hay facturas por aprobar ✓</div>'}</div>`;
 }
 
 // ─── CAUSACIÓN ───────────────────────────────────────────────────────────────
