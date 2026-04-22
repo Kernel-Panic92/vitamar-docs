@@ -1,5 +1,40 @@
 # Vitamar Docs - Changelog
 
+## v1.1.7 - Security Hardening
+Fecha: 2026-04-23
+
+### Security Audit Fixes
+- ✅ **AUTH**: All routes now require authentication + role checks
+  - /facturas/* - all endpoints protected
+  - /configuracion/imap/test, /smtp/test - admin only
+  - PDF and payment receipt downloads - require auth
+- ✅ **COMMAND INJECTION**: Input validation and sanitization
+  - Cron expression validation with regex
+  - Shell argument sanitization
+  - Numeric value range validation
+- ✅ **INFORMATION LEAKAGE**: Safe error handling in production
+  - Generic error messages returned to clients
+  - Detailed errors logged server-side only
+- ✅ **CREDENTIALS**: IMAP debug logging disabled
+- ✅ **BACKUP**: Placeholder hash improved with documentation
+
+### Usability Improvements
+- ✅ Pendientes module with filters and search
+- ✅ Filters: Todas, Sin aprobar, Sin pagar, Por vencer
+- ✅ Badge de estado visible per invoice
+- ✅ Color-coded by type: yellow (pending), purple (unpaid), red (due soon)
+
+### Bug Fixes
+- ✅ Fix updater: uses `reset --hard` to avoid merge conflicts
+- ✅ CRON jobs disabled (pending DIAN API integration)
+- ✅ Fixed undefined dates in facturas filters
+
+### Code Cleanup
+- ✅ Removed Aprobaciones module (redundant with Pendientes)
+- ✅ Created release v1.1.5 for recovery
+
+---
+
 ## v1.1.6 - Mejoras de usabilidad y limpieza de código
 Fecha: 2026-04-23
 
