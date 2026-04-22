@@ -391,11 +391,11 @@ async function rFacturas(filtro){
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
           <label style="font-size:10px;text-transform:uppercase;color:var(--muted)">Desde fecha</label>
-          <input type="date" id="ff-fd" value="${fBusqueda.fecha_desde}">
+          <input type="date" id="ff-fd" value="${fBusqueda.fecha_desde||''}">
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
           <label style="font-size:10px;text-transform:uppercase;color:var(--muted)">Hasta fecha</label>
-          <input type="date" id="ff-fh" value="${fBusqueda.fecha_hasta}">
+          <input type="date" id="ff-fh" value="${fBusqueda.fecha_hasta||''}">
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
           <label style="font-size:10px;text-transform:uppercase;color:var(--muted)">Valor mín ($)</label>
