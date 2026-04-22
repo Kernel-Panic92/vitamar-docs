@@ -110,7 +110,8 @@ app.listen(PORT, () => {
   if (process.env.NODE_ENV !== 'test') {
     const { iniciarCronJobs }   = require('./services/cron.service');
     const { iniciarServicioImap } = require('./services/imap.service');
-    iniciarCronJobs();
+    // Solo DIAN tácita - escalaciones deshabilitadas
+    iniciarCronJobs(true);
     iniciarServicioImap();
   }
 });
