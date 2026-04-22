@@ -55,12 +55,14 @@ function toggleSidebar(){$('sidebar').classList.add('open');$('mob-overlay').cla
 function closeSidebar(){$('sidebar').classList.remove('open');$('mob-overlay').classList.remove('visible')}
 
 // ─── MODAL ───────────────────────────────────────────────────────────────────
-function showM(title,body,w=560){
-  $('mroot').innerHTML=`<div class="modal-overlay open" onclick="if(event.target===this)closeM()">
+function showM(title,body,w=560,closable=true){
+  const overlayClick=closable?'onclick="if(event.target===this)closeM()"':'';
+  const closeBtn=closable?'<button class="btn btn-secondary btn-sm" onclick="closeM()">✕</button>':'<button class="btn btn-secondary btn-sm" disabled>✕</button>';
+  $('mroot').innerHTML=`<div class="modal-overlay open" ${overlayClick}>
     <div class="modal" style="max-width:${w}px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
         <span style="font-family:var(--font-head);font-size:18px;font-weight:700">${title}</span>
-        <button class="btn btn-secondary btn-sm" onclick="closeM()">✕</button>
+        ${closeBtn}
       </div>
       ${body}
     </div>
@@ -515,7 +517,9 @@ async function abrirF(id){
 async function mAprobar(id){
   const f=await api('GET',`/facturas/${id}`);
   if(!S.centros)S.centros=await api('GET','/centros');
+  if(!S.cats?.length)S.cats=await api('GET','/categorias');
   const co=S.centros.map(c=>`<option value="${c.id}" ${f.centro_operacion_id===c.id?'selected':''}>${esc(c.nombre)}</option>`).join('');
+  const catOpts=S.cats.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(c=>`<option value="${c.id}" ${f.categoria_id===c.id?'selected':''}>${esc(c.nombre)}</option>`).join('');
   showM('Aprobar factura',`
     <div style="margin-bottom:16px;padding:12px;background:rgba(79,142,247,.1);border-radius:8px">
       <div style="font-size:12px;color:var(--muted)">Factura</div>
@@ -524,20 +528,24 @@ async function mAprobar(id){
       <div style="font-size:20px;font-weight:700;color:var(--accent);margin-top:8px">${fmt(f.valor_total||0)}</div>
     </div>
     <div class="field"><label>CENTRO DE OPERACION *</label><select id="ap-centro"><option value="">- Seleccionar -</option>${co}</select></div>
+    <div class="field"><label>CATEGORIA *</label><select id="ap-cat"><option value="">- Seleccionar categoria -</option>${catOpts}</select></div>
     <div class="form-grid">
       <div class="field"><label>CENTRO DE COSTOS</label><input type="text" id="ap-cc" value="${esc(f.centro_costos||'')}"/></div>
       <div class="field"><label>REFERENCIA</label><input type="text" id="ap-ref" value="${esc(f.orden_compra||f.referencia||'')}"/></div>
     </div>
     <div class="field"><label>DESCRIPCION GASTO</label><textarea id="ap-desc" rows="3">${esc(f.descripcion_gasto||'')}</textarea></div>
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM()">Cancelar</button><button class="btn btn-success" onclick="doAprobar('${id}')">Confirmar</button></div>
-  `,560);
+  `,560,false);
 }
 
 async function doAprobar(id){
   const centro_id=$('ap-centro')?.value;
+  const categoria_id=$('ap-cat')?.value;
   if(!centro_id){toast('Selecciona el centro de operacion','error');return}
+  if(!categoria_id){toast('Selecciona la categoria','error');return}
   const b={
     centro_operacion_id:centro_id,
+    categoria_id,
     centro_costos:$('ap-cc')?.value?.trim()||null,
     descripcion_gasto:$('ap-desc')?.value?.trim()||null,
     referencia:$('ap-ref')?.value?.trim()||null
@@ -551,17 +559,22 @@ async function doAprobar(id){
 }
 
 async function mRechazar(id){
+  if(!S.cats?.length)S.cats=await api('GET','/categorias');
+  const catOpts=S.cats.sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(c=>`<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
   showM('Rechazar factura',`
+    <div class="field"><label>CATEGORIA *</label><select id="rechazo-cat"><option value="">- Seleccionar categoria -</option>${catOpts}</select></div>
     <div class="field"><label>MOTIVO *</label><textarea id="rechazo-motivo" rows="4" placeholder="Razon del rechazo..."></textarea></div>
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM()">Cancelar</button><button class="btn btn-danger" onclick="doRechazar('${id}')">Confirmar</button></div>
-  `,400);
+  `,400,false);
 }
 
 async function doRechazar(id){
+  const categoria_id=$('rechazo-cat')?.value;
   const motivo=$('rechazo-motivo')?.value?.trim();
+  if(!categoria_id){toast('Selecciona la categoria','error');return}
   if(!motivo){toast('Ingresa el motivo','error');return}
   try{
-    await api('PATCH',`/facturas/${id}/rechazar`,{motivo});
+    await api('PATCH',`/facturas/${id}/rechazar`,{categoria_id,motivo});
     closeM();
     toast('Factura rechazada','success');
     goTo(S.view);
