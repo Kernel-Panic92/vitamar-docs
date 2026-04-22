@@ -7,6 +7,18 @@ const fs = require('fs');
 
 router.use(authMiddleware);
 
+// Helper: sanitizar entrada para evitar command injection
+function sanitizeShellArg(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str.replace(/[;&|`$(){}\\n\r]/g, '').trim();
+}
+
+// Helper: validar expresión cron
+function isValidCron(expr) {
+  const cronRegex = /^(\*|(\d+(-\d+)?)(,\d+(-\d+)?)*)\s+(\*|(\d+(-\d+)?)(,\d+(-\d+)?)*)\s+(\*|(\d+(-\d+)?)(,\d+(-\d+)?)*)\s+(\*|(\d+(-\d+)?)(,\d+(-\d+)?)*)\s+(\*|(\d+(-\d+)?)(,\d+(-\d+)?)*)$/;
+  return cronRegex.test(expr);
+}
+
 const logoUpload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
@@ -334,8 +346,14 @@ router.post('/updater/check', requireRol('admin'), async (req, res) => {
 router.post('/updater/update', requireRol('admin'), async (req, res) => {
   let branch = req.body?.branch || 'main';
   
+  // Validar y sanitizar rama - solo permitir caracteres seguros
   if (!/^[a-zA-Z0-9_\-]+$/.test(branch)) {
     return res.status(400).json({ ok: false, error: 'Rama inválida. Solo letras, números, guiones y guiones bajos.' });
+  }
+  // Forzar a main si no es una rama permitida
+  const allowedBranches = ['main', 'master', 'release'];
+  if (!allowedBranches.includes(branch)) {
+    branch = 'main';
   }
   
   try {
@@ -343,10 +361,11 @@ router.post('/updater/update', requireRol('admin'), async (req, res) => {
     logUpdater('INICIANDO ACTUALIZACION (rama: ' + branch + ')');
     logUpdater('========================================');
     
-    logUpdater('1. Guardando cambios locales...');
-    execSync('git add -A && git stash 2>/dev/null || true', { cwd: APP_DIR, stdio: 'pipe' });
+    logUpdater('1. Verificando conexión...');
     
-    logUpdater('2. Pulling latest changes from ' + branch + '...');
+    logUpdater('2. Fetch y reset a origin/' + branch + '...');
+    execSync('git fetch origin && git reset --hard origin/' + branch, { cwd: APP_DIR, stdio: 'pipe' });
+    logUpdater('2b. Reset hard completado');
     const allowedBranches = ['main', 'master', 'release'];
     if (branch !== 'release' && !allowedBranches.includes(branch)) {
       branch = 'main';
@@ -434,7 +453,14 @@ router.get('/seguridad', requireRol('admin'), async (req, res) => {
 });
 
 router.put('/seguridad', requireRol('admin'), async (req, res) => {
-  const { rate_limit_window, rate_limit_max, fail2ban_enabled, fail2ban_bantime, fail2ban_findtime, fail2ban_maxretry } = req.body;
+  let { rate_limit_window, rate_limit_max, fail2ban_enabled, fail2ban_bantime, fail2ban_findtime, fail2ban_maxretry } = req.body;
+  
+  // Validar valores numéricos
+  rate_limit_window = Math.max(60, Math.min(86400, parseInt(rate_limit_window) || 900));
+  rate_limit_max = Math.max(10, Math.min(10000, parseInt(rate_limit_max) || 100));
+  fail2ban_bantime = Math.max(60, Math.min(604800, parseInt(fail2ban_bantime) || 3600));
+  fail2ban_findtime = Math.max(60, Math.min(86400, parseInt(fail2ban_findtime) || 600));
+  fail2ban_maxretry = Math.max(1, Math.min(100, parseInt(fail2ban_maxretry) || 10));
   
   const client = await db.getClient();
   try {
@@ -543,7 +569,17 @@ router.get('/backups-auto', requireRol('admin'), async (req, res) => {
 });
 
 router.put('/backups-auto', requireRol('admin'), async (req, res) => {
-  const { backup_auto_enabled, backup_auto_cron, backup_auto_path, backup_auto_retention, backup_auto_type, backup_auto_host, backup_auto_user, backup_auto_pass } = req.body;
+  let { backup_auto_enabled, backup_auto_cron, backup_auto_path, backup_auto_retention, backup_auto_type, backup_auto_host, backup_auto_user, backup_auto_pass } = req.body;
+  
+  // Validar y sanitizar expresión cron
+  if (backup_auto_cron && !isValidCron(backup_auto_cron)) {
+    return res.status(400).json({ error: 'Expresión cron inválida' });
+  }
+  
+  // Sanitizar rutas y credenciales
+  backup_auto_path = sanitizeShellArg(backup_auto_path || '/mnt/vitamar-nas/backup');
+  backup_auto_host = sanitizeShellArg(backup_auto_host || '');
+  backup_auto_user = sanitizeShellArg(backup_auto_user || '');
   
   const client = await db.getClient();
   try {
@@ -717,7 +753,13 @@ router.get('/cron', requireRol('admin'), async (req, res) => {
 });
 
 router.put('/cron', requireRol('admin'), async (req, res) => {
-  const { cron_imap, cron_escalaciones, cron_dian, cron_notificaciones } = req.body;
+  let { cron_imap, cron_escalaciones, cron_dian, cron_notificaciones } = req.body;
+  
+  // Validar expresiones cron
+  if (cron_imap && !isValidCron(cron_imap)) return res.status(400).json({ error: 'Expresión cron IMAP inválida' });
+  if (cron_escalaciones && !isValidCron(cron_escalaciones)) return res.status(400).json({ error: 'Expresión cron escalaciones inválida' });
+  if (cron_dian && !isValidCron(cron_dian)) return res.status(400).json({ error: 'Expresión cron DIAN inválida' });
+  if (cron_notificaciones && !isValidCron(cron_notificaciones)) return res.status(400).json({ error: 'Expresión cron notificaciones inválida' });
   
   try {
     const SCRIPT_DIR = '/root/vitamar-docs/scripts';
