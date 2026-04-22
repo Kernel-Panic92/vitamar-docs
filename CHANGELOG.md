@@ -24,6 +24,8 @@ Fecha: 2026-04-23
   - Sanitización de argumentos shell
   - Validación de valores numéricos en rangos seguros
 - ✅ **SEGURIDAD**: Manejo seguro de errores - oculta detalles en producción
+- ✅ **SEGURIDAD**: Logger IMAP desactivado (evitaba filtrar credenciales en logs)
+- ✅ **SEGURIDAD**: Placeholder hash de backup mejor documentado y seguro
 
 ### Limpieza de código
 - ✅ Eliminado módulo Aprobaciones (redundante con Pendientes)
