@@ -794,4 +794,42 @@ async function cargarConfigGlobal(){
     }
   }catch(e){}
 }
+async function rUsuarios(){
+  const u=await api('GET','/usuarios');
+  const lista=u.data||[];
+  $('content').innerHTML=`<div class="page-header"><div><div class="page-title">Usuarios</div><div class="page-sub">${lista.length} usuario(s)</div></div><button class="btn btn-primary" onclick="mUsuario()">+ Nuevo</button></div>
+    <div class="tbl"><table><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${lista.map(x=>`<tr><td>${esc(x.nombre)}</td><td>${esc(x.email)}</td><td>${bdg(x.rol)}</td><td>${x.activo?'<span style="color:var(--success)">Activo</span>':'<span style="color:var(--danger)">Inactivo</span>'}</td><td><button class="btn btn-secondary btn-sm" onclick="mUsuario('${x.id}')">Edit</button></tr>`).join('')}</tbody></table></div>`;
+}
+async function rBackup(){
+  $('content').innerHTML=`<div class="page-header"><div><div class="page-title">Backup</div><div class="page-sub">Respaldo de datos</div></div>
+    <div class="tbl" style="padding:24px">
+      <p style="margin-bottom:16px;color:var(--muted)">Genera una copia de seguridad de todas las facturas y configuraciones.</p>
+      <button class="btn btn-primary" onclick="doBackup()">Generar backup</button>
+      <div id="backup-status" style="margin-top:16px"></div>
+    </div>`;
+}
+async function doBackup(){
+  try{
+    $('backup-status').innerHTML='<span style="color:var(--accent)">Generando backup...</span>';
+    const r=await api('POST','/backup/generate');
+    $('backup-status').innerHTML=`<span style="color:var(--success)">Backup generado: ${esc(r.filename)}</span><br><a href="/api/backup/download/${r.filename}" download>Descargar</a>`;
+  }catch(e){$('backup-status').innerHTML=`<span style="color:var(--danger)">${e.message}</span>`}
+}
+async function rConfig(){
+  const cfg=await api('GET','/config');
+  const grupos={};
+  (cfg.data||[]).forEach(c=>{if(!grupos[c.grupo])grupos[c.grupo]=[];grupos[c.grupo].push(c)});
+  let html=`<div class="page-header"><div><div class="page-title">Configuracion</div><div class="page-sub">Parametros del sistema</div></div></div>`;
+  Object.keys(grupos).forEach(g=>{html+=`<div class="tbl" style="margin-bottom:12px"><div style="font-weight:600;padding:12px 16px;background:var(--surface)">${esc(g)}</div>${grupos[g].map(c=>`<div style="display:flex;align-items:center;padding:10px 16px;border-top:1px solid var(--border)"><span style="flex:1">${esc(c.clave)}</span><span style="color:var(--muted);margin-right:12px">${esc(c.valor)}</span><button class="btn btn-secondary btn-sm" onclick="mEditConfig('${c.id}')">Edit</button></div>`).join('')}</div>`});
+  $('content').innerHTML=html;
+}
+async function rAudit(){
+  const params=new URLSearchParams();params.set('limit','50');
+  const d=await api('GET',`/audit?${params.toString()}`);
+  const lista=d.data||[];
+  $('content').innerHTML=`<div class="page-header"><div><div class="page-title">Auditoria</div><div class="page-sub">${lista.length} evento(s)</div></div>
+    <div class="tbl"><table><thead><tr><th>Fecha</th><th>Usuario</th><th>Accion</th><th>Detalle</th></tr></thead>
+    <tbody>${lista.map(x=>`<tr><td style="font-size:12px;color:var(--muted)">${fdatetime(x.fecha)}</td><td>${esc(x.usuario_nombre||'—')}</td><td>${esc(x.accion)}</td><td style="font-size:12px;color:var(--muted)">${esc(x.detalles||'')}</td></tr>`).join('')}</tbody></table></div>`;
+}
 cargarConfigGlobal();
