@@ -128,22 +128,9 @@ async function verificarDianTacita() {
 }
 
 function iniciarCronJobs(soloDian = false) {
-  // Solo DIAN tácita - escalaciones deshabilitadas
-  if (!soloDian) {
-    // Cada 30 minutos: escalaciones
-    cron.schedule('*/30 * * * *', () => {
-      console.log('[Cron] Verificando escalaciones...');
-      verificarEscalaciones();
-    });
-  }
-
-  // Cada hora en punto: DIAN tácita
-  cron.schedule('0 * * * *', () => {
-    console.log('[Cron] Verificando DIAN tácita...');
-    verificarDianTacita();
-  });
-
-  console.log('[Cron] Jobs iniciados: DIAN tácita (c/1h)' + (soloDian ? '' : ' + escalaciones (c/30min)'));
+  // CRON jobs deshabilitados por ahora
+  // Pendiente: integrar con API DIAN para usar escalaciones y DIAN tácita
+  console.log('[Cron] Jobs deshabilitados (sin conexión DIAN)');
 }
 
 module.exports = { iniciarCronJobs, verificarEscalaciones, verificarDianTacita };
