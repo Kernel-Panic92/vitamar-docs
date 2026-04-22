@@ -215,7 +215,7 @@ async function goTo(v){
     else if(v==='causacion')await rCaus();
     else if(v==='categorias')await rCats();
     else if(v==='centros')await rCentros();
-    else if(v==='usuarios')await rUsers();
+    else if(v==='usuarios')await rUsuarios();
     else if(v==='backup')await rBackup();
     else if(v==='configuracion')await rConfig();
     else if(v==='audit')await rAudit();
