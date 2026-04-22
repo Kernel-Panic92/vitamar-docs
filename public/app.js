@@ -14,6 +14,7 @@ const EM={recibida:{l:'Recibida',c:'#60A5FA'},revision:{l:'En revisión',c:'#FBB
 const NAV=[
   {id:'dashboard',l:'Dashboard',i:'📊',s:'p'},
   {id:'facturas',l:'Facturas',i:'📄',s:'p'},
+  {id:'pendientes',l:'Pendientes',i:'⏳',s:'f',roles:['admin','contador','tesorero']},
   {id:'causacion',l:'Causación',i:'📥',s:'f',roles:['admin','contador','tesorero']},
   {id:'categorias',l:'Categorías',i:'🏷️',s:'c',roles:['admin','contador']},
   {id:'centros',l:'Centros',i:'🗺️',s:'c',roles:['admin','contador']},
@@ -209,6 +210,7 @@ async function goTo(v){
   try{
     if(v==='dashboard')await rDash();
     else if(v==='facturas')await rFacturas();
+    else if(v==='pendientes')await rPend();
     else if(v==='causacion')await rCaus();
     else if(v==='categorias')await rCats();
     else if(v==='centros')await rCentros();
