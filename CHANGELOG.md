@@ -1,5 +1,29 @@
 # Vitamar Docs - Changelog
 
+## v1.1.5 - Panel de configuración completo + Auditoría
+Fecha: 2026-04-22
+
+### Nuevas funcionalidades
+- ✅ Panel de configuración con pestañas: General, IMAP, SMTP, Tiempos, Seguridad, Backups, Tareas, Actualizar
+- ✅ Configuración de empresa: nombre, NIT, logo (subir imagen o URL)
+- ✅ Test de conexión IMAP y SMTP con feedback visual
+- ✅ Página de auditoría con estadísticas: accesos hoy, eventos flujo, intentos fallidos
+- ✅ Registro de IPs con más intentos fallidos
+- ✅ Fail2ban: instalación, inicio/parada/reinicio, configuración (bantime, findtime, maxretry)
+- ✅ Rate limiting configurable (ventana, máximo peticiones)
+- ✅ Backups automáticos con configuración de retención
+- ✅ Backup en NAS SMB con test de conexión
+- ✅ Tareas programadas (CRON) configurables: IMAP, Escalaciones, DIAN tácita, Notificaciones
+- ✅ Sistema de actualización del sistema con verificación y logs en tiempo real
+- ✅ Mejoras en centros de operación: dirección, teléfono, email, descripción
+
+### Mejoras visuales
+- ✅ UI de configuración mejorada con badges de estado
+- ✅ Verbose paso a paso en actualización del sistema
+- ✅ Previsualización de logo por URL
+
+---
+
 ## v1.1.4 - Optimización de backups
 Fecha: 2026-04-20
 
@@ -70,6 +94,8 @@ No hay tests unitarios ni de integración.
 
 | Tag | Fecha | Notas |
 |-----|-------|-------|
+| v1.1.5 | 2026-04-22 | Panel configuración completo + Auditoría |
+| v1.1.4 | 2026-04-20 | Optimización de backups |
 | v1.1.3 | 2026-04-18 | Corrección vulnerabilidades RCE |
 | v1.1.2 | 2026-04-18 | Actualizaciones via release (con bugs) |
 | v1.1.0 | 2026-04-18 | Corrección bug backup completo |
