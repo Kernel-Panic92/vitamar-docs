@@ -1336,6 +1336,7 @@ async function rConfig(){
       <button class="fb${cfgTabs==='imap'?' active':''}" onclick="cfgTabs='imap';rConfig()">📧 IMAP</button>
       <button class="fb${cfgTabs==='smtp'?' active':''}" onclick="cfgTabs='smtp';rConfig()">📤 SMTP</button>
       <button class="fb${cfgTabs==='horas'?' active':''}" onclick="cfgTabs='horas';rConfig()">⏱️ Tiempos</button>
+      <button class="fb${cfgTabs==='areas'?' active':''}" onclick="cfgTabs='areas';rConfig()">🏠 Áreas</button>
       <button class="fb${cfgTabs==='seguridad'?' active':''}" onclick="cfgTabs='seguridad';rConfig()">🔒 Seguridad</button>
       <button class="fb${cfgTabs==='backups'?' active':''}" onclick="cfgTabs='backups';rConfig()">💾 Backups</button>
       <button class="fb${cfgTabs==='cron'?' active':''}" onclick="cfgTabs='cron';rConfig()">⏰ Tareas</button>
@@ -1462,6 +1463,23 @@ async function renderCfgTab(cfg){
         <div style="display:flex;gap:10px;margin-top:20px">
           <button class="btn btn-primary" onclick="guardarCfg('horas')">💾 Guardar</button>
         </div>
+      </div>
+    `;
+  }
+  else if(cfgTabs==='areas'){
+    if(!S.usuarios)S.usuarios=await api('GET','/usuarios');
+    const areas=await api('GET','/areas');
+    const users=S.usuarios.filter(u=>u.rol==='jefe'||u.rol==='admin');
+    c.innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <div><div style="font-family:var(--font-head);font-size:16px;font-weight:700">Áreas</div><div style="font-size:13px;color:var(--muted);margin-top:4px">Gestión de áreas organizacionales</div></div>
+          <button class="btn btn-primary btn-sm" onclick="showM('Nueva área',`<div class='form-grid'><div class='field full'><label>NOMBRE</label><input type='text' id='new-area-nombre' placeholder='Nombre del área'/></div><div class='field'><label>JEFE (opcional)</label><select id='new-area-jefe'><option value=''>— Sin jefe —</option>${users.map(u=>`<option value='${u.id}'>${esc(u.nombre)}</option>`).join('')}</select></div><div class='field'><label>EMAIL</label><input type='email' id='new-area-email' placeholder='area@empresa.com'/></div></div><div class='modal-footer'><button class='btn btn-primary' onclick='crearArea()'>Crear área</button></div>`)">➕ Nueva área</button>
+        </div>
+        <div style="display:grid;gap:12px">${areas.length?areas.map(a=>`<div style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--surface2);border-radius:10px">
+          <div style="flex:1"><div style="font-weight:600">${esc(a.nombre)}</div><div style="font-size:12px;color:var(--muted)">${a.jefe_nombre?'Jefe: '+esc(a.jefe_nombre):'Sin jefe asignado'} · ${a.total_usuarios||0} usuario(s)</div></div>
+          <button class="btn btn-secondary btn-sm" onclick="editarArea('${a.id}','${esc(a.nombre)}','${a.jefe_id||''}','${esc(a.email||'')}')">✏️</button>
+        </div>`).join(''):'<div style="text-align:center;padding:40px;color:var(--muted)">No hay áreas configuradas</div>'}</div>
       </div>
     `;
   }
@@ -2099,3 +2117,44 @@ async function cargarConfigGlobal(){
   }catch(e){}
 }
 cargarConfigGlobal();
+
+async function crearArea(){
+  const nombre=$('new-area-nombre')?.value?.trim();
+  const jefe_id=$('new-area-jefe')?.value||null;
+  const email=$('new-area-email')?.value?.trim();
+  if(!nombre){toast('El nombre es requerido','error');return}
+  try{
+    await api('POST','/areas',{nombre,jefe_id,email});
+    toast('Área creada','success');
+    closeM();
+    rConfig();
+  }catch(e){toast(e.message,'error')}
+}
+
+async function editarArea(id,nombre,jefe_id,email){
+  const users=(S.usuarios||[]).filter(u=>u.rol==='jefe'||u.rol==='admin');
+  showM('Editar área',`<div class='form-grid'><div class='field full'><label>NOMBRE</label><input type='text' id='edit-area-nombre' value='${esc(nombre)}'/></div><div class='field'><label>JEFE (opcional)</label><select id='edit-area-jefe'><option value=''>— Sin jefe —</option>${users.map(u=>`<option value='${u.id}' ${u.id===jefe_id?'selected':''}>${esc(u.nombre)}</option>`).join('')}</select></div><div class='field'><label>EMAIL</label><input type='email' id='edit-area-email' value='${esc(email||'')}'/></div></div><div style="display:flex;gap:10px;margin-top:16px"><button class="btn btn-danger" onclick="eliminarArea('${id}')">Eliminar</button><button class="btn btn-primary" style="margin-left:auto" onclick="guardarArea('${id}')">Guardar</button></div>`);
+}
+
+async function guardarArea(id){
+  const nombre=$('edit-area-nombre')?.value?.trim();
+  const jefe_id=$('edit-area-jefe')?.value||null;
+  const email=$('edit-area-email')?.value?.trim();
+  if(!nombre){toast('El nombre es requerido','error');return}
+  try{
+    await api('PUT',`/areas/${id}`,{nombre,jefe_id,email});
+    toast('Área actualizada','success');
+    closeM();
+    rConfig();
+  }catch(e){toast(e.message,'error')}
+}
+
+async function eliminarArea(id){
+  if(!confirm('¿Eliminar esta área? Los usuarios quedan sin área asignada.'))return;
+  try{
+    await api('DELETE',`/areas/${id}`);
+    toast('Área eliminada','success');
+    closeM();
+    rConfig();
+  }catch(e){toast(e.message,'error')}
+}
