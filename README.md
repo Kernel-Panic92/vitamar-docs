@@ -10,6 +10,13 @@ Sistema de gestión documental para facturas electrónicas colombianas (DIAN). I
 - **Correo:** IMAP
 - **Jobs:** node-cron
 
+## Requisitos del servidor
+
+- Ubuntu Server 22.04 LTS (o cualquier distribución basada en Debian)
+- 2 vCPU, 4GB RAM, 40GB disco (mínimo)
+- PostgreSQL 14+
+- Node.js 18+
+
 ---
 
 ## Instalación rápida (recomendada)
@@ -36,21 +43,12 @@ El instalador configurará automáticamente:
 
 ---
 
-## Requisitos del servidor
+## Instalación manual
 
-- Ubuntu Server 22.04 LTS (o cualquier distribución basada en Debian)
-- 2 vCPU, 4GB RAM, 40GB disco (mínimo)
-- PostgreSQL 14+
-- Node.js 18+
-
----
-
-## Instalación rápida
-
-### 1. Clonar el repositorio
+### 1. Clonar repositorio
 
 ```bash
-git clone https://github.com/TU_USUARIO/docflow.git
+git clone https://github.com/Kernel-Panic92/docflow.git
 cd docflow
 ```
 
@@ -130,7 +128,7 @@ mkdir -p uploads/facturas uploads/soportes
 
 ## Proxy reverso con Nginx
 
-### Crear configuración
+### Crear configuración básica
 
 ```bash
 sudo nano /etc/nginx/sites-available/docflow
@@ -162,7 +160,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### SSL con Let's Encrypt (opcional)
+### SSL con Let's Encrypt
 
 ```bash
 sudo certbot --nginx -d TU_DOMINIO
@@ -170,9 +168,9 @@ sudo certbot --nginx -d TU_DOMINIO
 
 ---
 
-## Múltiples servicios con HTTPS (avanzado)
+## Múltiples servicios con HTTPS en la misma VM
 
-Si necesitás correr DocFlow junto con otras apps en la misma VM, podés usar Nginx como proxy reverso centralizado con certificados Let's Encrypt para cada dominio.
+Si necesitas correr DocFlow junto con otras aplicaciones en la misma VM, puedes usar Nginx como proxy reverso centralizado con certificados Let's Encrypt para cada dominio.
 
 ### Arquitectura
 
@@ -182,13 +180,13 @@ Internet
 FortiGate  80 → :80  /  443 → :443
     │
 Nginx :443
-  ├── server_name horixvitamar.fortiddns.com   → proxy :3000
-  └── server_name docflowvitamar.fortiddns.com → proxy :3100
+  ├── server_name servicio1.dominio.com   → proxy :3000
+  └── server_name servicio2.dominio.com    → proxy :3100
 ```
 
-### Configuración para múltiples dominios
+### Configuración paso a paso
 
-**Paso 1:** Configurar DocFlow en nginx con config temporal HTTP:
+**Paso 1:** Crear configuración temporal HTTP para DocFlow:
 
 ```bash
 sudo nano /etc/nginx/sites-available/docflow
@@ -197,7 +195,7 @@ sudo nano /etc/nginx/sites-available/docflow
 ```nginx
 server {
     listen 80;
-    server_name docflowvitamar.fortiddns.com;
+    server_name docflow.dominio.com;
 
     location / {
         proxy_pass http://127.0.0.1:3100;
@@ -210,60 +208,16 @@ sudo ln -s /etc/nginx/sites-available/docflow /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-**Paso 2:** Obtener certificado con certbot:
+**Paso 2:** Obtener certificado con Certbot:
 
 ```bash
-sudo certbot --nginx -d docflowvitamar.fortiddns.com
+sudo certbot --nginx -d docflow.dominio.com
 ```
 
-**Paso 3:** Actualizar config con SSL:
+**Paso 3:** Certbot actualiza la configuración automáticamente con SSL. Verificar:
 
 ```bash
-sudo nano /etc/nginx/sites-available/docflow
-```
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name docflowvitamar.fortiddns.com;
-
-    ssl_certificate     /etc/letsencrypt/live/docflowvitamar.fortiddns.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/docflowvitamar.fortiddns.com/privkey.pem;
-
-    ssl_protocols       TLSv1.2 TLSv1.3;
-    ssl_ciphers         ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384;
-    ssl_session_cache   shared:SSL:10m;
-    ssl_session_timeout 1d;
-
-    add_header Strict-Transport-Security "max-age=31536000" always;
-    add_header X-Frame-Options SAMEORIGIN;
-    add_header X-Content-Type-Options nosniff;
-
-    client_max_body_size 25M;
-
-    location / {
-        proxy_pass         http://127.0.0.1:3100;
-        proxy_http_version 1.1;
-        proxy_set_header   Upgrade $http_upgrade;
-        proxy_set_header   Connection 'upgrade';
-        proxy_set_header   Host $host;
-        proxy_set_header   X-Real-IP $remote_addr;
-        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-        proxy_read_timeout 300s;
-    }
-}
-
-server {
-    listen 80;
-    server_name docflowvitamar.fortiddns.com;
-    return 301 https://$host$request_uri;
-}
-```
-
-```bash
-sudo nginx -t && sudo systemctl reload nginx
+sudo cat /etc/nginx/sites-enabled/docflow
 ```
 
 **Paso 4:** Verificar renovación automática:
@@ -276,11 +230,15 @@ sudo certbot renew --dry-run
 
 Para agregar un tercer servicio (ej. en puerto :3200):
 
-1. Crear `/etc/nginx/sites-enabled/nuevoservicio` con config temporal HTTP
+1. Crear `/etc/nginx/sites-available/nuevoservicio` con config temporal HTTP
 2. `sudo nginx -t && sudo systemctl reload nginx`
-3. `sudo certbot --nginx -d nuevoservicio.fortiddns.com`
-4. Actualizar config con SSL
+3. `sudo certbot --nginx -d nuevoservicio.dominio.com`
+4. Certbot configura SSL automáticamente
 5. `sudo certbot renew --dry-run`
+
+---
+
+## Verificación
 
 ```bash
 # Verificar que el servicio está corriendo
@@ -308,9 +266,9 @@ Password: docflow2025
 
 ---
 
-## Migraciones adicionales (si se actualiza desde versión anterior)
+## Migraciones adicionales
 
-Si ya tenías una base de datos, ejecuta estas migraciones manualmente:
+Si actualizas desde una versión anterior, ejecuta estas migraciones manualmente:
 
 ```bash
 psql -h localhost -U docflow -d docflow -c "
@@ -361,7 +319,7 @@ docflow/
 │   │   ├── configuracion.js   # Config IMAP/SMTP
 │   │   ├── audit.js           # Log de auditoría
 │   │   ├── backup.js          # Backup/Restore
-│   │   └── sync.js           # Sincronización IMAP
+│   │   └── sync.js            # Sincronización IMAP
 │   └── services/
 │       ├── imap.service.js    # Ingesta correo
 │       ├── sync-state.js      # Estado de sincronización
@@ -374,7 +332,10 @@ docflow/
 ├── uploads/                   # PDFs y XMLs
 ├── backups/                   # Backups generados
 ├── logs/                      # Logs de sync
-└── README.md
+├── install.sh                 # Instalador interactivo
+├── update.sh                  # Actualizador
+├── README.md
+└── package.json
 ```
 
 ---
@@ -385,7 +346,7 @@ docflow/
 |----------|-------------|-------------------|
 | `NODE_ENV` | Modo de operación | `development` |
 | `PORT` | Puerto del servidor | `3100` |
-| `HOST` | Host de绑定 | `0.0.0.0` |
+| `HOST` | Host de enlace | `0.0.0.0` |
 | `DB_HOST` | Host PostgreSQL | `localhost` |
 | `DB_PORT` | Puerto PostgreSQL | `5432` |
 | `DB_NAME` | Nombre base de datos | `docflow` |
@@ -416,6 +377,7 @@ recibida → revision → aprobada → causada → pagada
 ```
 
 ### Jobs automáticos
+
 - **Cada 30 min:** Verifica facturas sin acción → escalaciones
 - **Cada hora:** Marca aceptación tácita DIAN (48h sin respuesta)
 
@@ -475,6 +437,7 @@ node src/db/migrate.js  # si hay migraciones pendientes
 pm2 restart docflow
 ```
 
+---
 
 ## Solución de problemas
 
