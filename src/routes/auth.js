@@ -288,8 +288,10 @@ router.post('/forgot-password', async (req, res) => {
 
     // Enviar email
     try {
+      console.log('[Auth] Enviando recovery a:', usuario.email);
       const smtp = getSmtpService();
       await smtp.enviarRecuperacion(usuario, token, req.headers.host || 'localhost');
+      console.log('[Auth] Email enviado exitosamente');
       res.json({ ok: true });
     } catch (mailErr) {
       console.error('[Auth] Error enviando correo:', mailErr.message);
