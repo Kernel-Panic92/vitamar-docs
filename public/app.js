@@ -346,9 +346,10 @@ async function rFacturas(filtro){
   if(fBusqueda.categoria_id)params.set('categoria_id',fBusqueda.categoria_id);
   if(fBusqueda.buscar)params.set('buscar',fBusqueda.buscar);
   params.set('limit','100');
-  
+
   const f=await api('GET',`/facturas?${params.toString()}`);S.facturas=f.data||[];
   const all=f.data||[];
+  const isAdmin=S.usuario?.rol==='admin';
   const cnts={todas:f.total||all.length};
   ['recibida','revision','aprobada','causada','rechazada'].forEach(e=>cnts[e]=all.filter(x=>x.estado===e).length);
   const fbs=[{id:'todas',l:'Todas'},{id:'recibida',l:'Recibidas'},{id:'revision',l:'En revisión'},{id:'aprobada',l:'Aprobadas'},{id:'causada',l:'Causadas'},{id:'rechazada',l:'Rechazadas'}].map(fb=>`<button class="fb${fFiltro===fb.id?' active':''}" onclick="rFacturas('${fb.id}')">${fb.l}<span class="fc">${cnts[fb.id]||0}</span></button>`).join('');
@@ -415,7 +416,7 @@ async function rFacturas(filtro){
     <div class="tbl">
       <div class="tbl-head"><div class="tbl-title">${all.length} factura(s)</div></div>
       <table><thead><tr><th># Factura</th><th>Centro</th><th>Proveedor</th><th>Categoría</th><th>Valor</th><th>Estado</th><th>Recibida</th><th></th></tr></thead>
-      <tbody>${all.length?all.map(f=>`<tr onclick="abrirF('${f.id}')"><td class="mono" data-label="Factura">${esc(f.numero_factura)}</td><td data-label="Centro" style="font-size:12px;color:var(--muted)">${esc(f.centro_operacion_nombre||'—')}</td><td data-label="Proveedor" style="font-weight:500">${esc(f.proveedor_nombre||f.nombre_emisor||'—')}</td><td data-label="Categoría">${ctag(f.categoria_color,f.categoria_nombre)}</td><td data-label="Valor" style="font-weight:500">${fmt(f.valor_total||f.valor||0)}</td><td data-label="Estado">${bdg(f.estado)}</td><td data-label="Recibida" style="color:var(--muted);font-size:12px">${f.fecha_factura?fdate(f.fecha_factura):fdatetime(f.recibida_en)}</td><td>${f.archivo_pdf?`<span onclick="event.stopPropagation();verPdf('${f.id}')" title="Ver PDF" style="color:var(--accent);font-size:16px;cursor:pointer">📄</span>`:''}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">Sin facturas</td></tr>'}</tbody></table>
+      <tbody>${all.length?all.map(f=>`<tr onclick="abrirF('${f.id}')"><td class="mono" data-label="Factura">${esc(f.numero_factura)}</td><td data-label="Centro" style="font-size:12px;color:var(--muted)">${esc(f.centro_operacion_nombre||'—')}</td><td data-label="Proveedor" style="font-weight:500">${esc(f.proveedor_nombre||f.nombre_emisor||'—')}</td><td data-label="Categoría">${ctag(f.categoria_color,f.categoria_nombre)}</td><td data-label="Valor" style="font-weight:500">${fmt(f.valor_total||f.valor||0)}</td><td data-label="Estado">${bdg(f.estado)}</td><td data-label="Recibida" style="color:var(--muted);font-size:12px">${f.fecha_factura?fdate(f.fecha_factura):fdatetime(f.recibida_en)}</td><td>${f.archivo_pdf?`<span onclick="event.stopPropagation();verPdf('${f.id}')" title="Ver PDF" style="color:var(--accent);font-size:16px;cursor:pointer">📄</span>`:''}${isAdmin?`<span onclick="event.stopPropagation();delFactura('${f.id}','${esc(f.numero_factura)}')" title="Eliminar" style="color:var(--danger);font-size:14px;cursor:pointer;margin-left:6px">🗑️</span>`:''}</td></tr>`).join(''):'<tr><td colspan="8" class="empty">Sin facturas</td></tr>'}</tbody></table>
     </div>`;
   refreshBadges();
 }
@@ -570,6 +571,7 @@ async function abrirF(id){
     if(f.soporte_pago)acc.push(`<button class="btn btn-secondary btn-sm" onclick="verSoporte('${id}')">📎 Ver soporte</button>`);
     acc.push(`<button class="btn btn-primary btn-sm" onclick="mPagar('${id}')">✓ Marcar pagada</button>`);
   }
+  if(isAdmin)acc.push(`<button class="btn btn-danger btn-sm" onclick="delFactura('${id}','${esc(f.numero_factura)}')">🗑️ Eliminar</button>`);
   showM(`Factura ${f.numero_factura}`,`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
       <div style="background:var(--surface2);padding:12px;border-radius:8px"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Proveedor</div><div style="font-weight:600;margin-top:4px">${esc(f.proveedor_nombre||f.nombre_emisor||'—')}</div></div>
@@ -911,6 +913,16 @@ async function delUser(id,nombre){
     await api('DELETE',`/usuarios/${id}`);
     toast('Usuario eliminado','success');
     rUsers();
+  }catch(e){toast(e.message,'error')}
+}
+
+async function delFactura(id,numero){
+  if(!confirm(`¿Eliminar la factura "${numero}"? Esta acción no se puede deshacer.`))return;
+  try{
+    await api('DELETE',`/facturas/${id}`);
+    toast('Factura eliminada','success');
+    if(VIsta==='facturas')renderizarFacturas();
+    closeM();
   }catch(e){toast(e.message,'error')}
 }
 
