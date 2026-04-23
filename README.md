@@ -170,7 +170,117 @@ sudo certbot --nginx -d TU_DOMINIO
 
 ---
 
-## Verificación
+## Múltiples servicios con HTTPS (avanzado)
+
+Si necesitás correr DocFlow junto con otras apps en la misma VM, podés usar Nginx como proxy reverso centralizado con certificados Let's Encrypt para cada dominio.
+
+### Arquitectura
+
+```
+Internet
+    │
+FortiGate  80 → :80  /  443 → :443
+    │
+Nginx :443
+  ├── server_name horixvitamar.fortiddns.com   → proxy :3000
+  └── server_name docflowvitamar.fortiddns.com → proxy :3100
+```
+
+### Configuración para múltiples dominios
+
+**Paso 1:** Configurar DocFlow en nginx con config temporal HTTP:
+
+```bash
+sudo nano /etc/nginx/sites-available/docflow
+```
+
+```nginx
+server {
+    listen 80;
+    server_name docflowvitamar.fortiddns.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:3100;
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/docflow /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**Paso 2:** Obtener certificado con certbot:
+
+```bash
+sudo certbot --nginx -d docflowvitamar.fortiddns.com
+```
+
+**Paso 3:** Actualizar config con SSL:
+
+```bash
+sudo nano /etc/nginx/sites-available/docflow
+```
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name docflowvitamar.fortiddns.com;
+
+    ssl_certificate     /etc/letsencrypt/live/docflowvitamar.fortiddns.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/docflowvitamar.fortiddns.com/privkey.pem;
+
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Frame-Options SAMEORIGIN;
+    add_header X-Content-Type-Options nosniff;
+
+    client_max_body_size 25M;
+
+    location / {
+        proxy_pass         http://127.0.0.1:3100;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection 'upgrade';
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 300s;
+    }
+}
+
+server {
+    listen 80;
+    server_name docflowvitamar.fortiddns.com;
+    return 301 https://$host$request_uri;
+}
+```
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**Paso 4:** Verificar renovación automática:
+
+```bash
+sudo certbot renew --dry-run
+```
+
+### Agregar nuevos servicios
+
+Para agregar un tercer servicio (ej. en puerto :3200):
+
+1. Crear `/etc/nginx/sites-enabled/nuevoservicio` con config temporal HTTP
+2. `sudo nginx -t && sudo systemctl reload nginx`
+3. `sudo certbot --nginx -d nuevoservicio.fortiddns.com`
+4. Actualizar config con SSL
+5. `sudo certbot renew --dry-run`
 
 ```bash
 # Verificar que el servicio está corriendo
