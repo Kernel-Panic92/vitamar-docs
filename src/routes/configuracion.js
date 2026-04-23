@@ -104,6 +104,11 @@ router.put('/', requireRol('admin'), async (req, res) => {
       if (imapService.clearConfigCache) imapService.clearConfigCache();
     } catch (e) {}
     
+    try {
+      const smtpService = require('../services/smtp.service');
+      if (smtpService.clearCache) smtpService.clearCache();
+    } catch (e) {}
+    
     const { rows } = await db.query('SELECT clave, valor, descripcion, actualizado_en FROM configuracion ORDER BY clave');
     const config = {};
     for (const row of rows) {
@@ -162,6 +167,7 @@ router.get('/smtp/test', requireRol('admin'), async (req, res) => {
   
   const host = req.query.host;
   const port = parseInt(req.query.port || '587');
+  const secure = req.query.secure === 'true' || req.query.secure === true;
   const user = req.query.user;
   const pass = req.query.pass;
   const from = req.query.from;
@@ -174,20 +180,22 @@ router.get('/smtp/test', requireRol('admin'), async (req, res) => {
     const transporter = nodemailer.createTransport({
       host,
       port,
-      secure: port === 465,
+      secure,
+      requireTLS: !secure,
       auth: { user, pass },
+      tls: { rejectUnauthorized: false },
     });
     
     await transporter.verify();
     
-    if (from) {
-      await transporter.sendMail({
-        from,
-        to: user,
-        subject: 'Prueba SMTP - Vitamar Docs',
-        text: 'Esta es una prueba de configuracion SMTP.\n\nSi recibes este correo, la configuracion es correcta.',
-      });
-    }
+    const fromAddr = from || user;
+    
+    await transporter.sendMail({
+      from: fromAddr,
+      to: user,
+      subject: 'Prueba SMTP - Vitamar Docs',
+      text: 'Esta es una prueba de configuracion SMTP.\n\nSi recibes este correo, la configuracion es correcta.',
+    });
     
     res.json({ ok: true, mensaje: 'Configuracion SMTP correcta' });
   } catch (err) {
