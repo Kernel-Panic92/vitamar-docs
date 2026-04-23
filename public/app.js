@@ -15,6 +15,7 @@ const NAV=[
   {id:'dashboard',l:'Dashboard',i:'📊',s:'p'},
   {id:'facturas',l:'Facturas',i:'📄',s:'p'},
   {id:'pendientes',l:'Pendientes',i:'⏰',s:'p'},
+  {id:'porpagar',l:'Por Pagar',i:'💳',s:'f',roles:['admin','tesorero']},
   {id:'causacion',l:'Causación',i:'📥',s:'f',roles:['admin','contador','tesorero']},
   {id:'categorias',l:'Categorías',i:'🏷️',s:'c',roles:['admin','contador']},
   {id:'centros',l:'Centros',i:'🗺️',s:'c',roles:['admin','contador']},
@@ -212,6 +213,7 @@ async function goTo(v){
     else if(v==='facturas')await rFacturas();
     else if(v==='pendientes')await rPend();
     else if(v==='causacion')await rCaus();
+    else if(v==='porpagar')await rPorPagar();
     else if(v==='categorias')await rCats();
     else if(v==='centros')await rCentros();
     else if(v==='usuarios')await rUsers();
@@ -552,6 +554,34 @@ async function rCaus(){
       <div style="font-size:12px;color:var(--muted)">${esc(f.centro_operacion_nombre||'Sin CO')} · ${f.fecha_factura?'Fact: '+fdate(f.fecha_factura):''} ${f.limite_pago?'· Vence: '+fdate(f.limite_pago):''}</div></div>
       <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:8px"><div style="font-size:18px;font-weight:700">${fmt(f.valor_total||f.valor||0)}</div>${f.archivo_pdf?`<button onclick="event.stopPropagation();verPdf('${f.id}')" class="btn btn-secondary btn-sm">📄 PDF</button>`:''}</div>
     </div>`).join(''):'<div class="empty">No hay facturas por causar ✓</div>'}</div>`;
+}
+
+// ─── POR PAGAR ───────────────────────────────────────────────────────────
+let porPagarBusqueda='';
+async function rPorPagar(){
+  porPagarBusqueda=$('porpagar-buscar')?.value||'';
+  const params=new URLSearchParams();
+  params.set('estado','causada');
+  if(porPagarBusqueda){
+    params.set('buscar',porPagarBusqueda);
+  }
+  const f=await api('GET',`/facturas?${params.toString()}&limit=100`);
+  const all=f.data||[];
+  $('content').innerHTML=`
+    <div class="page-header"><div><div class="page-title">Por Pagar</div><div class="page-sub">${all.length} factura(s) causadas pendientes de pago</div></div></div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
+      <input type="text" id="porpagar-buscar" placeholder="Buscar por # factura o proveedor..." value="${esc(porPagarBusqueda)}" onkeydown="if(event.key==='Enter')rPorPagar()" style="width:100%">
+    </div>
+    <div style="display:grid;gap:12px">${all.length?all.map(f=>`<div class="tbl" style="cursor:pointer;padding:16px 20px;display:flex;align-items:center;gap:20px" onclick="abrirF('${f.id}')">
+      <div style="flex:1"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="mono">${esc(f.numero_factura)}</span>${bdg(f.estado)}</div>
+      <div style="font-weight:500;margin-bottom:4px">${esc(f.proveedor_nombre||'Desconocido')}</div>
+      <div style="font-size:12px;color:var(--muted)">${esc(f.centro_operacion_nombre||'Sin CO')} · ${f.fecha_factura?'Fact: '+fdate(f.fecha_factura):''} ${f.limite_pago?'· Vence: '+fdate(f.limite_pago):''}</div></div>
+      <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+        <div style="font-size:18px;font-weight:700">${fmt(f.valor_total||f.valor||0)}</div>
+        ${f.archivo_pdf?`<button onclick="event.stopPropagation();verPdf('${f.id}')" class="btn btn-secondary btn-sm">📄 PDF</button>`:''}
+        ${f.soporte_pago?`<button onclick="event.stopPropagation();verSoporte('${f.id}')" class="btn btn-secondary btn-sm">📎 Soporte</button>`:''}
+      </div>
+    </div>`).join(''):'<div class="empty">No hay facturas por pagar ✓</div>'}</div>`;
 }
 
 // ─── FACTURA DETALLE ─────────────────────────────────────────────────────────
