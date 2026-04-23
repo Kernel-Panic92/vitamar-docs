@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
-#  install.sh — Instalador automático de Vitamar Docs v1.0.0
+#  install.sh — Instalador automático de DocFlow v1.1.7
 #
 #  Uso:
 #    chmod +x install.sh
@@ -19,7 +19,7 @@ INSTALL_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo ""
 echo -e "${AZUL}══════════════════════════════════════════════${RESET}"
-echo -e "${AZUL}   Vitamar Docs — Instalador v1.0.0${RESET}"
+echo -e "${AZUL}   DocFlow — Instalador v1.0.0${RESET}"
 echo -e "${AZUL}   Sistema de Gestión Documental${RESET}"
 echo -e "${AZUL}══════════════════════════════════════════════${RESET}"
 echo ""
@@ -139,8 +139,8 @@ echo -e "${AZUL}── Configuración general ───────────�
 read -p "  Puerto del servidor [3100]: " PUERTO
 PUERTO=${PUERTO:-3100}
 
-read -p "  Nombre de la empresa [Vitamar]: " EMPRESA
-EMPRESA=${EMPRESA:-"Vitamar"}
+read -p "  Nombre de la empresa [DocFlow]: " EMPRESA
+EMPRESA=${EMPRESA:-"DocFlow"}
 
 # ── 6. Base de datos ──────────────────────────────────────────
 echo ""
@@ -246,8 +246,8 @@ if [[ "$CONF_SMTP" =~ ^[Ss]$ ]]; then
   SMTP_PORT=${SMTP_PORT:-"587"}
   read -p "  Usuario SMTP: " SMTP_USER
   read -s -p "  Contraseña SMTP: " SMTP_PASSWORD; echo ""
-  read -p "  Nombre remitente [Vitamar Docs]: " SMTP_FROM_NAME
-  SMTP_FROM_NAME=${SMTP_FROM_NAME:-"Vitamar Docs"}
+  read -p "  Nombre remitente [DocFlow Docs]: " SMTP_FROM_NAME
+  SMTP_FROM_NAME=${SMTP_FROM_NAME:-"DocFlow Docs"}
   SMTP_FROM="$SMTP_FROM_NAME <$SMTP_USER>"
   ok "SMTP configurado: $SMTP_HOST:$SMTP_PORT"
 else
@@ -359,8 +359,8 @@ if [[ "$CONF_NAS" =~ ^[Ss]$ ]]; then
   read -p "  IP/ruta del share (ej: //192.168.1.10/Backups): " SMB_SERVER
   read -p "  Usuario del NAS: " SMB_USER
   read -s -p "  Contraseña del NAS: " SMB_PASS; echo ""
-  read -p "  Subcarpeta en el NAS [VitamarDocs_Backups]: " NAS_SUB
-  NAS_SUB=${NAS_SUB:-"VitamarDocs_Backups"}
+  read -p "  Subcarpeta en el NAS [DocFlowDocs_Backups]: " NAS_SUB
+  NAS_SUB=${NAS_SUB:-"DocFlowDocs_Backups"}
   BACKUP_RED="$SMB_MOUNT/$NAS_SUB"
   ok "NAS configurado: $SMB_SERVER"
 fi
@@ -369,7 +369,7 @@ fi
 info "Generando script de backup..."
 cat > "$INSTALL_DIR/backup.sh" << BACKUPEOF
 #!/bin/bash
-# ── Backup automático Vitamar Docs ──────────────────────────────
+# ── Backup automático DocFlow ──────────────────────────────
 set -e
 TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
 BACKUP_LOCAL="$BACKUP_LOCAL"
@@ -438,7 +438,7 @@ fi
 
 # ── 15. PM2 ───────────────────────────────────────────────────
 echo ""
-info "Iniciando Vitamar Docs con PM2..."
+info "Iniciando DocFlow con PM2..."
 
 # Generar ecosystem.config.js
 cat > "$INSTALL_DIR/ecosystem.config.js" << PM2EOF
@@ -693,7 +693,7 @@ RAMA=$(git -C "$INSTALL_DIR" branch --show-current 2>/dev/null || echo "—")
 
 echo ""
 echo -e "${VERDE}══════════════════════════════════════════════${RESET}"
-echo -e "${VERDE}  ✅ Vitamar Docs v${VERSION} instalado correctamente${RESET}"
+echo -e "${VERDE}  ✅ DocFlow v${VERSION} instalado correctamente${RESET}"
 echo -e "${VERDE}══════════════════════════════════════════════${RESET}"
 echo ""
 echo -e "  🏢 Empresa:    $EMPRESA"
