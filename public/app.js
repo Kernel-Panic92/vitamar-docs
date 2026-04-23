@@ -478,30 +478,32 @@ async function rPend(){
   });
   
   let criticas,alertas,normales;
-  if(pendFiltro==='sinaprobar'){criticas=sinAprobar;alertas=[];normales=[];}
-  else if(pendFiltro==='sinpagar'){criticas=sinPagar;alertas=[];normales=[];}
+  if(pendFiltro==='sinaprobar'){criticas=all.filter(x=>['recibida','revision'].includes(x.estado));alertas=[];normales=[];}
+  else if(pendFiltro==='sinpagar'){criticas=all.filter(x=>['aprobada','causada'].includes(x.estado));alertas=[];normales=[];}
   else if(pendFiltro==='vencer'){criticas=porVencer;alertas=[];normales=[];}
   else{
-    criticas=all.filter(x=>x.prioridad==='critico');
-    alertas=all.filter(x=>x.prioridad==='alerta');
+    criticas=all.filter(x=>['critico','sinaprobar'].includes(x.prioridad));
+    alertas=all.filter(x=>['alerta','sinpagar'].includes(x.prioridad));
     normales=all.filter(x=>x.prioridad==='normal');
   }
   
-  function renderItem(f){
+function renderItem(f){
     let colorBarra='var(--accent)';
     let badgeExtra='';
     if(['recibida','revision'].includes(f.estado)){
       colorBarra='var(--warning)';
       badgeExtra='<span class="badge" style="background:rgba(251,191,36,.2);color:#f7d44f">⏳ Sin aprobar</span>';
-    }else if(['aprobada','causada'].includes(f.estado)&&f.estado!=='pagada'){
+    }else if(['aprobada','causada'].includes(f.estado)){
       colorBarra='#A78BFA';
       badgeExtra='<span class="badge" style="background:rgba(167,139,250,.2);color:#A78BFA">💳 Sin pagar</span>';
     }else if(f.limite_pago){
       const dias=Math.ceil((new Date(f.limite_pago)-new Date())/(1000*60*60*24));
-      if(dias>=0&&dias<=7){colorBarra='var(--danger)';badgeExtra='<span class="badge" style="background:rgba(248,113,113,.2);color:#f7614f">⏰ Vence pronto</span>';}
+      if(dias>=0&&dias<=7){colorBarra='var(--danger)';badgeExtra='<span class="badge" style="background:rgba(248,113,113,.2);color:#f7614f">⏰ Vence pronto</span>'}
     }
     const priorBadge=f.prioridad==='critico'?'<span class="badge" style="background:rgba(248,113,113,.2);color:#f7614f">🔴 Crítico</span>':
-                      f.prioridad==='alerta'?'<span class="badge" style="background:rgba(251,191,36,.2);color:#f7d44f">🟡 Alerta</span>':'';
+                          f.prioridad==='alerta'?'<span class="badge" style="background:rgba(251,191,36,.2);color:#f7d44f">🟡 Alerta</span>':
+                          f.prioridad==='sinaprobar'?'<span class="badge" style="background:rgba(251,191,36,.2);color:#f7d44f">⏳ Sin aprobar</span>':
+                          f.prioridad==='sinpagar'?'<span class="badge" style="background:rgba(167,139,250,.2);color:#A78BFA">💳 Sin pagar</span>':'';
     const tipoBadge=f.tipo_urgencia==='dian'?'<span class="badge b-revision">DIAN</span>':
                     f.tipo_urgencia==='soporte'?'<span class="badge b-causada">Sin soporte</span>':
                     f.tipo_urgencia==='revision'?'<span class="badge b-recibida">Sin revisar</span>':'';
