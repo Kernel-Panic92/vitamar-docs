@@ -32,8 +32,6 @@ async function getEmpresaNombre() {
   const cfg = await getConfig();
   return cfg.empresa_nombre || 'DocFlow';
 }
-  transporter = null;
-}
 
 async function getTransporter() {
   if (transporter) return transporter;
