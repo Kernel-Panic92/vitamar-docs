@@ -1,4 +1,4 @@
-# Vitamar Docs v1.1.5
+# DocFlow v1.1.5
 
 ## Novedades de esta versión
 - Panel de configuración completo con 8 pestañas: General, IMAP, SMTP, Tiempos, Seguridad, Backups, Tareas, Actualizar
@@ -31,14 +31,14 @@
 
 ## Instalación
 ```bash
-git clone https://github.com/Kernel-Panic92/vitamar-docs.git
-cd vitamar-docs
+git clone https://github.com/Kernel-Panic92/docflow.git
+cd docflow
 npm install
 cp .env.example .env
 npm run migrate
-pm2 start src/server.js --name vitamar-docs
+pm2 start src/server.js --name docflow
 ```
 
 ## Credenciales por defecto
-- Email: admin@vitamar.com
-- Password: vitamar2025
+- Email: admin@docflow.com
+- Password: docflow2025

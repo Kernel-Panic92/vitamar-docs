@@ -1,4 +1,4 @@
-# Vitamar Docs - Changelog
+# DocFlow - Changelog
 
 ## v1.1.7 - Security Hardening
 Fecha: 2026-04-23
@@ -141,7 +141,7 @@ Fecha: 2026-04-18
 Los commits `73dd3b8` y `0dae77f` tienen errores de sintaxis en `src/routes/backup.js`. Causado por código async incompleto. Versión estable: `35315d6`.
 
 ### ⚠️ Password hardcoded en seed.js
-Línea 135: `console.log('    Password: vitamar2025');` - Debería usar variable de entorno.
+Línea 135: `console.log('    Password: docflow2025');` - Debería usar variable de entorno.
 
 ### ⚠️ Console.log de debug
 Hay 88+ occurrences de console.log en el código, algunos con datos sensibles. Para producción debería reducirse.
@@ -178,8 +178,8 @@ No hay tests unitarios ni de integración.
 
 ```bash
 # Clone project
-git clone https://github.com/Kernel-Panic92/vitamar-docs.git
-cd vitamar-docs
+git clone https://github.com/Kernel-Panic92/docflow.git
+cd docflow
 
 # Install dependencies
 npm install
@@ -192,9 +192,9 @@ cp .env.example .env
 npm run migrate
 
 # Start
-pm2 start src/server.js --name vitamar-docs
+pm2 start src/server.js --name docflow
 ```
 
 ## Acceso inicial
-- Email: admin@vitamar.com
+- Email: admin@docflow.com
 - Password: (configurado en .env o durante setup)

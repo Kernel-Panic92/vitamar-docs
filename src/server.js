@@ -110,7 +110,7 @@ app.listen(PORT, () => {
         year: year
       });
     } catch { 
-      res.json({ version: '1.0.0', name: 'vitamar-docs', author: '', year: new Date().getFullYear().toString() }); 
+      res.json({ version: '1.0.0', name: 'docflow', author: '', year: new Date().getFullYear().toString() }); 
     }
   });
 

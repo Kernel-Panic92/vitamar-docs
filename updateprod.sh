@@ -8,8 +8,8 @@ set -euo pipefail
 CANAL="${1:-stable}"
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_FILE="$APP_DIR/deploy.log"
-APP_NAME="vitamar-docs"
-PM2_NAME="vitamar-docs"
+APP_NAME="docflow"
+PM2_NAME="docflow"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 err() { log "ERROR: $*"; exit 1; }

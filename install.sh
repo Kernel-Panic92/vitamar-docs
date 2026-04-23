@@ -39,7 +39,7 @@ if [[ "$INSTALL_DIR" == /mnt/* ]]; then
   warn "Ejecutando desde filesystem de Windows (WSL)."
   warn "Copiando a carpeta de Linux..."
   
-  NEW_DIR="$HOME/vitamar-docs"
+  NEW_DIR="$HOME/docflow"
   if [[ -d "$NEW_DIR" ]]; then
     warn "Ya existe $NEW_DIR. Usando ese directorio."
     cd "$NEW_DIR"
@@ -152,8 +152,8 @@ DB_HOST=${DB_HOST:-"localhost"}
 read -p "  Puerto de PostgreSQL [5432]: " DB_PORT
 DB_PORT=${DB_PORT:-"5432"}
 
-read -p "  Nombre de la base de datos [vitamar_docs]: " DB_NAME
-DB_NAME=${DB_NAME:-"vitamar_docs"}
+read -p "  Nombre de la base de datos [docflow]: " DB_NAME
+DB_NAME=${DB_NAME:-"docflow"}
 
 read -p "  Usuario de PostgreSQL [postgres]: " DB_USER
 DB_USER=${DB_USER:-"postgres"}
@@ -214,13 +214,13 @@ read -p "  ¿Configurar FortiMail ahora? [s/N]: " CONF_IMAP
 IMAP_HOST="" IMAP_PORT="993" IMAP_USER="" IMAP_PASSWORD="" IMAP_TLS="true" IMAP_POLL="5"
 
 if [[ "$CONF_IMAP" =~ ^[Ss]$ ]]; then
-  read -p "  Host FortiMail (ej: mail.vitamar.com): " IMAP_HOST
+  read -p "  Host FortiMail (ej: mail.docflow.com): " IMAP_HOST
   [[ -z "$IMAP_HOST" ]] && err "El host de FortiMail es requerido."
 
   read -p "  Puerto IMAP [993]: " IMAP_PORT
   IMAP_PORT=${IMAP_PORT:-"993"}
 
-  read -p "  Correo de facturas (ej: facturas@vitamar.com): " IMAP_USER
+  read -p "  Correo de facturas (ej: facturas@docflow.com): " IMAP_USER
   [[ -z "$IMAP_USER" ]] && err "El correo es requerido."
 
   read -s -p "  Contraseña del correo: " IMAP_PASSWORD
@@ -241,7 +241,7 @@ read -p "  ¿Configurar correo saliente para notificaciones? [s/N]: " CONF_SMTP
 SMTP_HOST="" SMTP_PORT="587" SMTP_USER="" SMTP_PASSWORD="" SMTP_FROM=""
 
 if [[ "$CONF_SMTP" =~ ^[Ss]$ ]]; then
-  read -p "  Host SMTP (ej: mail.vitamar.com): " SMTP_HOST
+  read -p "  Host SMTP (ej: mail.docflow.com): " SMTP_HOST
   read -p "  Puerto SMTP [587]: " SMTP_PORT
   SMTP_PORT=${SMTP_PORT:-"587"}
   read -p "  Usuario SMTP: " SMTP_USER
@@ -346,7 +346,7 @@ ok "Carpeta de archivos: $INSTALL_DIR/uploads/facturas"
 # ── 14. Backup ────────────────────────────────────────────────
 echo ""
 echo -e "${AZUL}── Configuración de Backup ──────────────────${RESET}"
-BACKUP_LOCAL="$HOME/backups/vitamar-docs"
+BACKUP_LOCAL="$HOME/backups/docflow"
 mkdir -p "$BACKUP_LOCAL"
 ok "Carpeta de backups: $BACKUP_LOCAL"
 
@@ -387,7 +387,7 @@ PGPASSWORD="$DB_PASSWORD"
 UPLOAD_DIR="$INSTALL_DIR/uploads/facturas"
 
 mkdir -p "\$BACKUP_LOCAL"
-FILENAME="vitamar_docs_\${TIMESTAMP}"
+FILENAME="docflow_\${TIMESTAMP}"
 
 # Dump PostgreSQL
 echo "[\$(date '+%H:%M:%S')] Exportando base de datos..."
@@ -431,8 +431,8 @@ ok "backup.sh generado"
 # Permisos sudo para NAS
 if [[ "$USAR_NAS" == "true" ]]; then
   echo "$USER ALL=(ALL) NOPASSWD: /bin/mount, /bin/umount, /usr/bin/mkdir, /bin/mkdir" | \
-    sudo tee /etc/sudoers.d/vitamar-docs-mount > /dev/null
-  sudo chmod 440 /etc/sudoers.d/vitamar-docs-mount
+    sudo tee /etc/sudoers.d/docflow-mount > /dev/null
+  sudo chmod 440 /etc/sudoers.d/docflow-mount
   ok "Permisos sudo para mount configurados"
 fi
 
@@ -444,7 +444,7 @@ info "Iniciando Vitamar Docs con PM2..."
 cat > "$INSTALL_DIR/ecosystem.config.js" << PM2EOF
 module.exports = {
   apps: [{
-    name:        'vitamar-docs',
+    name:        'docflow',
     script:      'src/server.js',
     cwd:         '$INSTALL_DIR',
     instances:   1,
@@ -463,8 +463,8 @@ PM2EOF
 
 mkdir -p "$INSTALL_DIR/logs"
 
-if pm2 list | grep -q "vitamar-docs"; then
-  pm2 reload vitamar-docs
+if pm2 list | grep -q "docflow"; then
+  pm2 reload docflow
   ok "PM2: recargado"
 else
   pm2 start "$INSTALL_DIR/ecosystem.config.js" --env production
@@ -479,8 +479,8 @@ ok "PM2 configurado para arrancar con el sistema"
 echo ""
 read -p "  ¿Configurar backup automático diario a las 2 AM? [s/N]: " CONF_CRON
 if [[ "$CONF_CRON" =~ ^[Ss]$ ]]; then
-  CRON_LINE="0 2 * * * $INSTALL_DIR/backup.sh >> /var/log/backup_vitamar_docs.log 2>&1"
-  (sudo crontab -l 2>/dev/null | grep -v "backup_vitamar_docs\|backup\.sh.*vitamar"; echo "$CRON_LINE") | sudo crontab -
+  CRON_LINE="0 2 * * * $INSTALL_DIR/backup.sh >> /var/log/backup_docflow.log 2>&1"
+  (sudo crontab -l 2>/dev/null | grep -v "backup_docflow\|backup\.sh.*docflow"; echo "$CRON_LINE") | sudo crontab -
   ok "Cron configurado: backup diario a las 2:00 AM"
 fi
 
@@ -499,7 +499,7 @@ if [[ "$CONF_HTTPS" =~ ^[Ss]$ ]]; then
   fi
   ok "Nginx: $(nginx -v 2>&1)"
 
-  read -p "  Dominio del servidor (ej: docs.vitamar.com): " HTTPS_DOMAIN
+  read -p "  Dominio del servidor (ej: docs.docflow.com): " HTTPS_DOMAIN
   while [[ -z "$HTTPS_DOMAIN" ]]; do
     warn "El dominio es requerido."
     read -p "  Dominio: " HTTPS_DOMAIN
@@ -515,7 +515,7 @@ if [[ "$CONF_HTTPS" =~ ^[Ss]$ ]]; then
   read -p "  Selecciona [1/2]: " CERT_TIPO
   CERT_TIPO=${CERT_TIPO:-1}
 
-  NGINX_CONF="/etc/nginx/sites-available/vitamar-docs"
+  NGINX_CONF="/etc/nginx/sites-available/docflow"
 
   if [[ "$CERT_TIPO" == "2" ]]; then
     if ! command -v certbot &>/dev/null; then
@@ -530,14 +530,14 @@ if [[ "$CONF_HTTPS" =~ ^[Ss]$ ]]; then
       APACHE_DETENIDO=true
     fi
 
-    sudo tee /etc/nginx/sites-available/vitamar-certbot > /dev/null << CERTEOF
+    sudo tee /etc/nginx/sites-available/docflow-certbot > /dev/null << CERTEOF
 server {
     listen 80;
     server_name $HTTPS_DOMAIN;
     location / { return 200 'ok'; }
 }
 CERTEOF
-    sudo ln -sf /etc/nginx/sites-available/vitamar-certbot /etc/nginx/sites-enabled/vitamar-certbot
+    sudo ln -sf /etc/nginx/sites-available/docflow-certbot /etc/nginx/sites-enabled/docflow-certbot
     sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
     sudo systemctl restart nginx
 
@@ -546,7 +546,7 @@ CERTEOF
     sudo certbot certonly --nginx -d "$HTTPS_DOMAIN" --non-interactive --agree-tos -m "$CERTBOT_EMAIL" \
       || err "Certbot falló. Verifica que el dominio resuelva a esta IP y los puertos 80/443 estén abiertos."
 
-    sudo rm -f /etc/nginx/sites-enabled/vitamar-certbot
+    sudo rm -f /etc/nginx/sites-enabled/docflow-certbot
     SSL_CERT="/etc/letsencrypt/live/$HTTPS_DOMAIN/fullchain.pem"
     SSL_KEY="/etc/letsencrypt/live/$HTTPS_DOMAIN/privkey.pem"
     ok "Certificado Let's Encrypt obtenido"
@@ -554,7 +554,7 @@ CERTEOF
     [[ "${APACHE_DETENIDO:-false}" == "true" ]] && sudo systemctl start apache2
 
   else
-    CERT_DIR="/etc/ssl/vitamar-docs"
+    CERT_DIR="/etc/ssl/docflow"
     info "Generando certificado SSL autofirmado (válido 10 años)..."
     sudo mkdir -p "$CERT_DIR"
     sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
@@ -566,7 +566,7 @@ CERTEOF
     sudo chmod 644 "$CERT_DIR/cert.pem"
     SSL_CERT="$CERT_DIR/cert.pem"
     SSL_KEY="$CERT_DIR/key.pem"
-    CERT_EXPORT="$HOME/vitamar_docs_cert.crt"
+    CERT_EXPORT="$HOME/docflow_cert.crt"
     sudo cp "$CERT_DIR/cert.pem" "$CERT_EXPORT"
     sudo chown "$USER" "$CERT_EXPORT"
     ok "Certificado autofirmado generado → $CERT_EXPORT"
@@ -615,7 +615,7 @@ server {
 }
 NGINXEOF
 
-  sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/vitamar-docs
+  sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/docflow
   sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
   sudo nginx -t || err "Error en configuración de Nginx"
   sudo systemctl restart nginx
@@ -648,17 +648,17 @@ if [[ "$CONF_F2B" =~ ^[Ss]$ ]]; then
   [[ ! "$CONF_HTTPS" =~ ^[Ss]$ ]] && \
     warn "HTTPS no configurado — Fail2ban solo funcionará si Nginx está activo."
 
-  sudo tee /etc/fail2ban/filter.d/vitamar-docs-login.conf > /dev/null << 'F2BFILTER'
+  sudo tee /etc/fail2ban/filter.d/docflow-login.conf > /dev/null << 'F2BFILTER'
 [Definition]
 failregex = ^<HOST> .* "POST /api/auth/login HTTP.*" 401
 ignoreregex =
 F2BFILTER
 
-  sudo tee /etc/fail2ban/jail.d/vitamar-docs.conf > /dev/null << F2BJAIL
-[vitamar-docs-login]
+  sudo tee /etc/fail2ban/jail.d/docflow.conf > /dev/null << F2BJAIL
+[docflow-login]
 enabled   = true
 port      = $F2B_PORT,80,443
-filter    = vitamar-docs-login
+filter    = docflow-login
 logpath   = $NGINX_LOG
 backend   = polling
 maxretry  = 5
@@ -684,7 +684,7 @@ if [[ "$HTTP_CODE" == "200" ]]; then
   ok "Health check OK (HTTP $HTTP_CODE)"
 else
   warn "Health check retornó HTTP $HTTP_CODE — la app puede estar iniciando, espera unos segundos."
-  warn "Verifica con: pm2 logs vitamar-docs"
+  warn "Verifica con: pm2 logs docflow"
 fi
 
 # ── 20. Resumen final ─────────────────────────────────────────
@@ -704,8 +704,8 @@ echo -e "  🗄️  Base datos: $DB_NAME @ $DB_HOST:$DB_PORT"
 echo ""
 echo "  ╔══════════════════════════════════════╗"
 echo "  ║     CREDENCIALES POR DEFECTO         ║"
-echo "  ║  Usuario: admin@vitamar.com          ║"
-echo "  ║  Password: vitamar2025               ║"
+echo "  ║  Usuario: admin@docflow.com          ║"
+echo "  ║  Password: docflow2025               ║"
 echo "  ║  ⚠  Cambia la contraseña            ║"
 echo "  ║     tras el primer login             ║"
 echo "  ╚══════════════════════════════════════╝"
@@ -714,12 +714,12 @@ echo -e "${AMARILLO}  ⚠  Escalación nivel 1: sin acción en ${HORAS_ESC1}h �
 echo -e "${AMARILLO}  ⚠  Escalación nivel 2: sin acción en $((HORAS_ESC1 + HORAS_ESC2))h → gerencia${RESET}"
 echo -e "${AMARILLO}  ⚠  DIAN tácita automática a las ${HORAS_DIAN}h${RESET}"
 [[ "$CERT_TIPO" == "1" && -n "$HTTPS_URL" ]] && \
-  echo -e "${AMARILLO}  ⚠  Instala el certificado ~/vitamar_docs_cert.crt en los equipos clientes.${RESET}"
+  echo -e "${AMARILLO}  ⚠  Instala el certificado ~/docflow_cert.crt en los equipos clientes.${RESET}"
 [[ "$CERT_TIPO" == "1" && -n "$HTTPS_URL" ]] && \
   echo -e "${AMARILLO}  ⚠  Agrega al DNS interno: $SERVER_IP  $HTTPS_DOMAIN${RESET}"
 echo -e "  🌿 Rama:       $RAMA"
 echo ""
-echo -e "  pm2 logs vitamar-docs      # Ver logs en tiempo real"
-echo -e "  pm2 restart vitamar-docs   # Reiniciar"
+echo -e "  pm2 logs docflow      # Ver logs en tiempo real"
+echo -e "  pm2 restart docflow   # Reiniciar"
 echo -e "  bash $INSTALL_DIR/backup.sh   # Backup manual"
 echo ""

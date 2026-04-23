@@ -853,7 +853,7 @@ async function mArea(id){
   showM(id?'Editar área':'Nueva área',`
     <div class="field"><label>NOMBRE *</label><input id="an" value="${esc(area?.nombre||'')}" placeholder="Ej: Sistemas"/></div>
     <div class="field"><label>JEFE</label><select id="aj"><option value="">— Sin asignar —</option>${opts}</select></div>
-    <div class="field"><label>CORREO</label><input id="ae" type="email" value="${esc(area?.email||'')}" placeholder="area@vitamar.com"/></div>
+    <div class="field"><label>CORREO</label><input id="ae" type="email" value="${esc(area?.email||'')}" placeholder="area@tu-dominio.com"/></div>
     ${id?`<div class="field"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="aa-activo" ${area?.ativo!==false?'checked':''}/> Área activa</label></div>`:''}
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeM()">Cancelar</button><button class="btn btn-primary" onclick="saveArea()">Guardar</button></div>
   `,400);
@@ -973,7 +973,7 @@ async function mUser(id){
   
   showM(id?'Editar usuario':'Nuevo usuario',`
     <div class="field"><label>NOMBRE *</label><input id="un" value="${esc(usr?.nombre||'')}" placeholder="Nombre completo"/></div>
-    <div class="field"><label>EMAIL *</label><input id="ue" type="email" value="${esc(usr?.email||'')}" placeholder="user@vitamar.com"/></div>
+    <div class="field"><label>EMAIL *</label><input id="ue" type="email" value="${esc(usr?.email||'')}" placeholder="usuario@tu-dominio.com"/></div>
     <div class="field"><label>CONTRASEÑA ${id?'(dejar vacío para no cambiar)':''}</label><input id="up" type="password" placeholder="••••••••"/></div>
     <div class="form-grid">
       <div class="field"><label>ROL</label><select id="ur"><option value="comprador" ${usr?.rol==='comprador'?'selected':''}>Comprador</option><option value="contador" ${usr?.rol==='contador'?'selected':''}>Contador</option><option value="tesorero" ${usr?.rol==='tesorero'?'selected':''}>Tesorero</option><option value="auditor" ${usr?.rol==='auditor'?'selected':''}>Auditor</option><option value="admin" ${usr?.rol==='admin'?'selected':''}>Admin</option></select></div>
@@ -1553,7 +1553,7 @@ async function renderCfgTab(cfg){
             </select>
           </div>
           <div class="field"><label>FRECUENCIA (cron)</label><input type="text" id="cfg-backup-auto-cron" value="${r.config?.backup_auto_cron||'0 2 * * *'}" placeholder="0 2 * * *"/><div style="font-size:11px;color:var(--muted);margin-top:4px">Formato: minuto hora día mes díaSemana. Ej: "0 2 * * *" = diario a las 2am</div></div>
-          <div class="field"><label>RETENCIÓN LOCAL (días)</label><input type="number" id="cfg-backup-auto-retention" value="${r.config?.backup_auto_retention||'7'}" placeholder="7"/><div style="font-size:11px;color:var(--success);margin-top:4px">✓ Backup local: /root/vitamar-docs/backups</div></div>
+          <div class="field"><label>RETENCIÓN LOCAL (días)</label><input type="number" id="cfg-backup-auto-retention" value="${r.config?.backup_auto_retention||'7'}" placeholder="7"/><div style="font-size:11px;color:var(--success);margin-top:4px">✓ Backup local: ${APP_DIR}/backups</div></div>
         </div>
         <div style="display:flex;gap:10px;margin-top:20px">
           <button class="btn btn-primary" onclick="guardarCfg('backups')">💾 Guardar</button>
@@ -1643,7 +1643,7 @@ async function guardarCfg(tab){
   }else if(tab==='backups'){
     data.backup_auto_enabled=$('cfg-backup-auto-enabled')?.value||'false';
     data.backup_auto_cron=$('cfg-backup-auto-cron')?.value?.trim()||'';
-    data.backup_auto_path=$('cfg-backup-auto-path')?.value?.trim()||'/mnt/vitamar-nas/backup';
+    data.backup_auto_path=$('cfg-backup-auto-path')?.value?.trim()||'$HOME/backups/docflow';
     data.backup_auto_type=$('cfg-backup-auto-type')?.value||'local';
     data.backup_auto_host=$('cfg-backup-auto-host')?.value?.trim()||'';
     data.backup_auto_user=$('cfg-backup-auto-user')?.value?.trim()||'';
@@ -2038,7 +2038,7 @@ async function mCentro(id){
     <div class="field"><label>NOMBRE *</label><input id="cn-nombre" value="${esc(centro?.nombre||'')}" placeholder="Ej: Bogotá Centro"/></div>
     <div class="form-grid">
       <div class="field"><label>CÓDIGO</label><input id="cn-codigo" value="${esc(centro?.codigo||'')}" placeholder="Ej: BOG-01"/></div>
-      <div class="field"><label>EMAIL</label><input id="cn-email" type="email" value="${esc(centro?.email||'')}" placeholder="sede@vitamar.com"/></div>
+      <div class="field"><label>EMAIL</label><input id="cn-email" type="email" value="${esc(centro?.email||'')}" placeholder="sede@tu-dominio.com"/></div>
     </div>
     <div class="field"><label>DIRECCIÓN</label><input id="cn-dir" value="${esc(centro?.direccion||'')}" placeholder="Dirección completa"/></div>
     <div class="form-grid">

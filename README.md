@@ -1,4 +1,4 @@
-# Vitamar Docs
+# DocFlow
 
 Sistema de gestión documental para facturas electrónicas colombianas (DIAN). Importa automáticamente facturas desde correo IMAP, las procesa mediante un flujo de aprobación configurable y las envía a causación y pago.
 
@@ -16,8 +16,8 @@ Sistema de gestión documental para facturas electrónicas colombianas (DIAN). I
 
 ```bash
 # Clonar el repositorio
-git clone https://github.com/Kernel-Panic92/vitamar-docs.git
-cd vitamar-docs
+git clone https://github.com/Kernel-Panic92/docflow.git
+cd docflow
 
 # Ejecutar el instalador interactivo
 chmod +x install.sh
@@ -50,8 +50,8 @@ El instalador configurará automáticamente:
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/TU_USUARIO/vitamar-docs.git
-cd vitamar-docs
+git clone https://github.com/TU_USUARIO/docflow.git
+cd docflow
 ```
 
 ### 2. Instalar dependencias del sistema
@@ -65,10 +65,10 @@ sudo apt install -y nodejs npm postgresql postgresql-contrib nginx \
 ### 3. Configurar PostgreSQL
 
 ```bash
-sudo -u postgres psql -c "CREATE DATABASE vitamar_docs;"
-sudo -u postgres psql -c "CREATE USER vitamar WITH ENCRYPTED PASSWORD 'TU_PASSWORD_FUERTE';"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE vitamar_docs TO vitamar;"
-sudo -u postgres psql -d vitamar_docs -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+sudo -u postgres psql -c "CREATE DATABASE docflow;"
+sudo -u postgres psql -c "CREATE USER docflow WITH ENCRYPTED PASSWORD 'TU_PASSWORD_FUERTE';"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE docflow TO docflow;"
+sudo -u postgres psql -d docflow -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
 ```
 
 ### 4. Instalar dependencias de Node
@@ -92,8 +92,8 @@ PORT=3100
 HOST=0.0.0.0
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=vitamar_docs
-DB_USER=vitamar
+DB_NAME=docflow
+DB_USER=docflow
 DB_PASSWORD=TU_PASSWORD_FUERTE
 JWT_SECRET=$(openssl rand -hex 32)
 UPLOAD_DIR=./uploads
@@ -115,7 +115,7 @@ node src/db/seed.js
 
 ```bash
 sudo npm install -g pm2
-pm2 start src/server.js --name vitamar-docs
+pm2 start src/server.js --name docflow
 pm2 startup  # Seguir instrucciones para persistir al reiniciar
 pm2 save
 ```
@@ -133,7 +133,7 @@ mkdir -p uploads/facturas uploads/soportes
 ### Crear configuración
 
 ```bash
-sudo nano /etc/nginx/sites-available/vitamar-docs
+sudo nano /etc/nginx/sites-available/docflow
 ```
 
 ```nginx
@@ -156,7 +156,7 @@ server {
 ```
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/vitamar-docs /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/docflow /etc/nginx/sites-enabled/
 sudo rm /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl reload nginx
@@ -177,10 +177,10 @@ sudo certbot --nginx -d TU_DOMINIO
 pm2 status
 
 # Ver logs en tiempo real
-pm2 logs vitamar-docs
+pm2 logs docflow
 
 # Reiniciar si es necesario
-pm2 restart vitamar-docs
+pm2 restart docflow
 ```
 
 Accede a `http://TU_SERVIDOR:3100` o a través de Nginx en `http://TU_DOMINIO`
@@ -190,8 +190,8 @@ Accede a `http://TU_SERVIDOR:3100` o a través de Nginx en `http://TU_DOMINIO`
 ## Acceso inicial
 
 ```
-Email:    admin@vitamar.com
-Password: vitamar2025
+Email:    admin@docflow.com
+Password: docflow2025
 ```
 
 ⚠️ Cambiar la contraseña en el primer acceso.
@@ -203,7 +203,7 @@ Password: vitamar2025
 Si ya tenías una base de datos, ejecuta estas migraciones manualmente:
 
 ```bash
-psql -h localhost -U vitamar -d vitamar_docs -c "
+psql -h localhost -U docflow -d docflow -c "
 -- Agregar columna jefe_id a áreas (FK a usuarios)
 ALTER TABLE areas ADD COLUMN IF NOT EXISTS jefe_id UUID REFERENCES usuarios(id) ON DELETE SET NULL;
 
@@ -232,7 +232,7 @@ CREATE TABLE IF NOT EXISTS categorias_usuario (
 ## Estructura del proyecto
 
 ```
-vitamar-docs/
+docflow/
 ├── src/
 │   ├── server.js              # Entry point
 │   ├── db/
@@ -278,7 +278,7 @@ vitamar-docs/
 | `HOST` | Host de绑定 | `0.0.0.0` |
 | `DB_HOST` | Host PostgreSQL | `localhost` |
 | `DB_PORT` | Puerto PostgreSQL | `5432` |
-| `DB_NAME` | Nombre base de datos | `vitamar_docs` |
+| `DB_NAME` | Nombre base de datos | `docflow` |
 | `DB_USER` | Usuario PostgreSQL | `postgres` |
 | `DB_PASSWORD` | Password PostgreSQL | — |
 | `JWT_SECRET` | Clave secreta JWT | — |
@@ -340,7 +340,7 @@ El sistema incluye backup/restore completo desde la GUI (**Backup y Restauració
 ### Método automático (recomendado)
 
 ```bash
-cd vitamar-docs
+cd docflow
 chmod +x update.sh
 ./update.sh
 ```
@@ -353,16 +353,16 @@ El actualizador:
 5. Ofrece ejecutar migraciones
 6. Reinicia el servicio
 
-**Requiere:** Token de GitHub en `~/.vitamar_token` (para repos privados).
+**Requiere:** Token de GitHub en `~/.docflow_token` (para repos privados).
 
 ### Método manual
 
 ```bash
-cd vitamar-docs
+cd docflow
 git pull
 npm install
 node src/db/migrate.js  # si hay migraciones pendientes
-pm2 restart vitamar-docs
+pm2 restart docflow
 ```
 
 
@@ -370,7 +370,7 @@ pm2 restart vitamar-docs
 
 ### La app no inicia
 ```bash
-pm2 logs vitamar-docs
+pm2 logs docflow
 # Verificar que PostgreSQL está corriendo
 sudo systemctl status postgresql
 ```

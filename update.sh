@@ -19,12 +19,12 @@ warn() { echo -e "${AMARILLO}  ⚠ $1${RESET}"; }
 err()  { echo -e "${ROJO}  ✗ $1${RESET}"; exit 1; }
 
 INSTALL_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO="Kernel-Panic92/vitamar-docs"
-PM2_NAME="vitamar-docs"
+REPO="Kernel-Panic92/docflow"
+PM2_NAME="docflow"
 
 echo ""
 echo -e "${AZUL}══════════════════════════════════════════════${RESET}"
-echo -e "${AZUL}   Vitamar Docs — Actualizador${RESET}"
+echo -e "${AZUL}   DocFlow — Actualizador${RESET}"
 echo -e "${AZUL}══════════════════════════════════════════════${RESET}"
 echo ""
 
@@ -86,7 +86,7 @@ CONFIRM=${CONFIRM:-S}
 
 # ── Backup preventivo ─────────────────────────────────────────
 info "Creando backup preventivo..."
-BACKUP_DIR="$HOME/backups/vitamar-docs"
+BACKUP_DIR="$HOME/backups/docflow"
 mkdir -p "$BACKUP_DIR"
 BACKUP_FILE="$BACKUP_DIR/pre_update_$(date +%Y%m%d_%H%M%S).tar.gz"
 

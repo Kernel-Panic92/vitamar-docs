@@ -19,7 +19,7 @@ async function generarBackupAuto() {
 
   const retention = parseInt(cfg.backup_auto_retention || '7');
   const fecha = new Date().toISOString().slice(0, 10);
-  const filename = `vitamar_backup_${fecha}_${Date.now()}.zip`;
+  const filename = `docflow_backup_${fecha}_${Date.now()}.zip`;
   const localPath = path.join(LOCAL_BACKUP_DIR, filename);
 
   const zip = new AdmZip();
@@ -51,7 +51,7 @@ async function generarBackupAuto() {
   console.log(`[Backup-Auto] Backup local: ${filename}`);
 
   const archivos = fs.readdirSync(LOCAL_BACKUP_DIR)
-    .filter(f => f.startsWith('vitamar_backup_') && f.endsWith('.zip'))
+    .filter(f => f.startsWith('docflow_backup_') && f.endsWith('.zip'))
     .sort()
     .reverse();
 

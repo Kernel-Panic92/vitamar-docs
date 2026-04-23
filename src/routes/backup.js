@@ -27,7 +27,7 @@ const upload = multer({
 
 const APP_DIR = path.resolve(__dirname, '../..');
 const HOME_DIR = os.homedir();
-const BACKUP_DIR = path.join(HOME_DIR, 'backups', 'vitamar-docs');
+const BACKUP_DIR = path.join(HOME_DIR, 'backups', 'docflow');
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(APP_DIR, 'uploads');
 
 console.log('[Backup] Directorio de backups:', BACKUP_DIR);
@@ -43,7 +43,7 @@ function ensureBackupDir() {
 function getBackupFiles() {
   ensureBackupDir();
   return fs.readdirSync(BACKUP_DIR)
-    .filter(f => f.startsWith('vitamar_backup_') && f.endsWith('.zip'))
+    .filter(f => f.startsWith('docflow_backup_') && f.endsWith('.zip'))
     .map(f => {
       const full = path.join(BACKUP_DIR, f);
       const stat = fs.statSync(full);
@@ -170,7 +170,7 @@ router.get('/', soloAdmin, async (req, res) => {
     // Paso 2: Descargar archivo existente
     if (action === 'download') {
       const filename = req.query.filename;
-      if (!filename || !/^vitamar_backup_[\w\-]+\.zip$/.test(filename)) {
+      if (!filename || !/^docflow_backup_[\w\-]+\.zip$/.test(filename)) {
         return res.status(400).json({ error: 'Nombre de archivo inválido' });
       }
       const filepath = path.join(BACKUP_DIR, filename);
@@ -191,8 +191,8 @@ router.get('/', soloAdmin, async (req, res) => {
     
     const fecha = new Date().toISOString().slice(0, 10);
     const filename = tipo === 'config' 
-      ? `vitamar_backup_config_${fecha}_${timestamp}.zip`
-      : `vitamar_backup_${fecha}_${timestamp}.zip`;
+      ? `docflow_backup_config_${fecha}_${timestamp}.zip`
+      : `docflow_backup_${fecha}_${timestamp}.zip`;
 
     console.log('[Backup] Guardando:', filename);
     
@@ -242,7 +242,7 @@ router.get('/lista', soloAdmin, (req, res) => {
 // GET /api/backup/descargar/:filename — descarga backup específico
 router.get('/descargar/:filename', soloAdmin, (req, res) => {
   const { filename } = req.params;
-  if (!/^vitamar_backup_[\w\-]+\.zip$/.test(filename)) {
+  if (!/^docflow_backup_[\w\-]+\.zip$/.test(filename)) {
     return res.status(400).json({ error: 'Nombre de archivo inválido' });
   }
 
@@ -356,7 +356,7 @@ router.post('/restore', soloAdmin, upload.single('backup'), async (req, res) => 
 // POST /api/restore/local/:filename — restaura desde backup en servidor
 router.post('/restore/local/:filename', soloAdmin, (req, res) => {
   const { filename } = req.params;
-  if (!/^vitamar_backup_[\w\-]+\.zip$/.test(filename)) {
+  if (!/^docflow_backup_[\w\-]+\.zip$/.test(filename)) {
     return res.status(400).json({ error: 'Nombre de archivo inválido' });
   }
 
@@ -459,7 +459,7 @@ router.post('/restore/local/:filename', soloAdmin, (req, res) => {
 // DELETE /api/backup/:filename — elimina backup del servidor
 router.delete('/:filename', soloAdmin, (req, res) => {
   const { filename } = req.params;
-  if (!/^vitamar_backup_[\w\-]+\.zip$/.test(filename)) {
+  if (!/^docflow_backup_[\w\-]+\.zip$/.test(filename)) {
     return res.status(400).json({ error: 'Nombre de archivo inválido' });
   }
 

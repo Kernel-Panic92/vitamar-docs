@@ -30,7 +30,7 @@ function getTransporter() {
 }
 
 function getFromAddress() {
-  return process.env.SMTP_FROM || 'Vitamar Docs <noreply@vitamar.com>';
+  return process.env.SMTP_FROM || 'DocFlow <noreply@tu-dominio.com>';
 }
 
 function getBaseUrl(reqHost) {

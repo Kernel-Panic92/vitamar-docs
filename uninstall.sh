@@ -36,7 +36,7 @@ echo -e "${AMARILLO}  ⚠ Esta acción es IRREVERSIBLE${RESET}"
 echo ""
 echo "  Se eliminarán:"
 echo "    • Base de datos PostgreSQL completa"
-echo "    • Proceso PM2 (vitamar-docs)"
+echo "    • Proceso PM2 (docflow)"
 echo "    • Archivos de la aplicación"
 echo "    • Backups"
 echo "    • Configuración de Cron, Nginx, Fail2ban"
@@ -54,7 +54,7 @@ echo -e "${AZUL}── Cargando configuración del .env ────────
 ENV_FILE="$UNINSTALL_DIR/.env"
 if [[ -f "$ENV_FILE" ]]; then
   source <(grep -E '^[^#]*=' "$ENV_FILE" | sed 's/=\(.*\)/="\1"/')
-  DB_NAME="${DB_NAME:-vitamar_docs}"
+  DB_NAME="${DB_NAME:-docflow}"
   DB_USER="${DB_USER:-postgres}"
   DB_HOST="${DB_HOST:-localhost}"
   DB_PORT="${DB_PORT:-5432}"
@@ -62,7 +62,7 @@ if [[ -f "$ENV_FILE" ]]; then
   ok "Configuración cargada desde .env"
 else
   warn "No se encontró .env. Usando valores por defecto."
-  DB_NAME="vitamar_docs"
+  DB_NAME="docflow"
   DB_USER="postgres"
   DB_HOST="localhost"
   DB_PORT="5432"
@@ -75,9 +75,9 @@ DB_PASSWORD="${DB_PASSWORD:-}"
 echo ""
 echo -e "${AZUL}── Deteniendo servicio PM2 ──────────────────────${RESET}"
 
-if pm2 list 2>/dev/null | grep -q "vitamar-docs"; then
-  pm2 stop vitamar-docs 2>/dev/null || true
-  pm2 delete vitamar-docs 2>/dev/null || true
+if pm2 list 2>/dev/null | grep -q "docflow"; then
+  pm2 stop docflow 2>/dev/null || true
+  pm2 delete docflow 2>/dev/null || true
   pm2 save 2>/dev/null || true
   ok "Proceso PM2 detenido y eliminado"
 else
@@ -89,27 +89,27 @@ echo ""
 echo -e "${AZUL}── Deteniendo servicios del sistema ───────────────${RESET}"
 
 # Cron
-CRON_LINE=$(sudo crontab -l 2>/dev/null | grep -v "backup_vitamar_docs\|backup\.sh.*vitamar" || echo "")
+CRON_LINE=$(sudo crontab -l 2>/dev/null | grep -v "backup_docflow\|backup\.sh.*docflow" || echo "")
 echo "$CRON_LINE" | sudo crontab - 2>/dev/null || true
 ok "Cron de backup eliminado"
 
 # Nginx
-if [[ -f /etc/nginx/sites-enabled/vitamar-docs ]]; then
-  sudo rm -f /etc/nginx/sites-enabled/vitamar-docs
+if [[ -f /etc/nginx/sites-enabled/docflow ]]; then
+  sudo rm -f /etc/nginx/sites-enabled/docflow
   ok "Configuración Nginx eliminada"
 fi
 
 # Fail2ban
-if [[ -f /etc/fail2ban/jail.d/vitamar-docs.conf ]]; then
-  sudo rm -f /etc/fail2ban/jail.d/vitamar-docs.conf
-  sudo rm -f /etc/fail2ban/filter.d/vitamar-docs-login.conf
+if [[ -f /etc/fail2ban/jail.d/docflow.conf ]]; then
+  sudo rm -f /etc/fail2ban/jail.d/docflow.conf
+  sudo rm -f /etc/fail2ban/filter.d/docflow-login.conf
   sudo systemctl restart fail2ban 2>/dev/null || true
   ok "Fail2ban eliminado"
 fi
 
 # Sudoers para mount NAS
-if [[ -f /etc/sudoers.d/vitamar-docs-mount ]]; then
-  sudo rm -f /etc/sudoers.d/vitamar-docs-mount
+if [[ -f /etc/sudoers.d/docflow-mount ]]; then
+  sudo rm -f /etc/sudoers.d/docflow-mount
   ok "Permisos sudo para mount eliminados"
 fi
 
@@ -151,13 +151,13 @@ echo -e "${AZUL}── Eliminando archivos ────────────�
 if [[ -d "$UNINSTALL_DIR" ]]; then
   # Hacer backup de logs antes de eliminar si existen
   if [[ -d "$UNINSTALL_DIR/logs" ]] && [[ -n "$(ls -A "$UNINSTALL_DIR/logs" 2>/dev/null)" ]]; then
-    LOGS_BACKUP="$HOME/vitamar-docs_logs_$(date +%Y%m%d_%H%M%S)"
+    LOGS_BACKUP="$HOME/docflow_logs_$(date +%Y%m%d_%H%M%S)"
     cp -r "$UNINSTALL_DIR/logs" "$LOGS_BACKUP"
     ok "Logs respaldados en: $LOGS_BACKUP"
   fi
 
   if [[ -d "$UNINSTALL_DIR/uploads" ]] && [[ -n "$(ls -A "$UNINSTALL_DIR/uploads" 2>/dev/null)" ]]; then
-    UPLOADS_BACKUP="$HOME/vitamar-docs_uploads_$(date +%Y%m%d_%H%M%S)"
+    UPLOADS_BACKUP="$HOME/docflow_uploads_$(date +%Y%m%d_%H%M%S)"
     cp -r "$UNINSTALL_DIR/uploads" "$UPLOADS_BACKUP"
     ok "Uploads respaldados en: $UPLOADS_BACKUP"
   fi

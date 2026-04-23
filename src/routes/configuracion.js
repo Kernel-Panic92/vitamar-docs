@@ -4,6 +4,8 @@ const { authMiddleware, requireRol } = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const HOME_DIR = os.homedir();
 
 router.use(authMiddleware);
 
@@ -412,7 +414,7 @@ router.post('/updater/update', requireRol('admin'), async (req, res) => {
 router.post('/updater/restart', requireRol('admin'), async (req, res) => {
   try {
     logUpdater('Reiniciando servicio...');
-    execSync('pm2 restart vitamar-docs', { cwd: APP_DIR, stdio: 'pipe' });
+    execSync('pm2 restart docflow', { cwd: APP_DIR, stdio: 'pipe' });
     logUpdater('Servicio reiniciado');
     res.json({ ok: true, message: 'Servicio reiniciado' });
   } catch (err) {
@@ -489,15 +491,15 @@ router.put('/seguridad', requireRol('admin'), async (req, res) => {
     if (fail2ban_enabled === 'true') {
       try {
         execSync(`cat > /etc/fail2ban/jail.local << 'EOF'
-[vitamar-api]
+[docflow]
 enabled = true
 port = 3100
-filter = vitamar-api
-logpath = /root/vitamar-docs/logs/*.log
+filter = docflow
+logpath = ${APP_DIR}/logs/*.log
 maxretry = ${fail2ban_maxretry || 10}
 bantime = ${fail2ban_bantime || 3600}
 findtime = ${fail2ban_findtime || 600}
-action = iptables-allports[name=vitamar]
+action = iptables-allports[name=docflow]
 EOF`, { stdio: 'pipe' });
         
         execSync('systemctl restart fail2ban 2>/dev/null || true', { stdio: 'pipe' });
@@ -545,15 +547,15 @@ router.get('/backups-auto', requireRol('admin'), async (req, res) => {
     if (cfg.backup_auto_type === 'smb') {
       nasMounted = true;
     } else {
-      nasMounted = fs.existsSync(cfg.backup_auto_path || '/mnt/vitamar-nas/backup');
+      nasMounted = fs.existsSync(cfg.backup_auto_path || path.join(HOME_DIR, 'backups', 'docflow'));
     }
     
     let lastBackup = null;
-    const backupsPath = cfg.backup_auto_path || '/mnt/vitamar-nas/backup';
+    const backupsPath = cfg.backup_auto_path || path.join(HOME_DIR, 'backups', 'docflow');
     if (cfg.backup_auto_type === 'smb') {
       lastBackup = '(SMB - se actualiza tras el próximo backup)';
     } else if (fs.existsSync(backupsPath)) {
-      const files = execSync(`ls -t ${backupsPath}/vitamar_backup_*.zip 2>/dev/null | head -1 || echo none`).toString().trim();
+      const files = execSync(`ls -t ${backupsPath}/docflow_backup_*.zip 2>/dev/null | head -1 || echo none`).toString().trim();
       lastBackup = files !== 'none' ? files : null;
     }
     
@@ -577,7 +579,7 @@ router.put('/backups-auto', requireRol('admin'), async (req, res) => {
   }
   
   // Sanitizar rutas y credenciales
-  backup_auto_path = sanitizeShellArg(backup_auto_path || '/mnt/vitamar-nas/backup');
+  backup_auto_path = sanitizeShellArg(backup_auto_path || path.join(HOME_DIR, 'backups', 'docflow'));
   backup_auto_host = sanitizeShellArg(backup_auto_host || '');
   backup_auto_user = sanitizeShellArg(backup_auto_user || '');
   
@@ -608,7 +610,7 @@ router.put('/backups-auto', requireRol('admin'), async (req, res) => {
     }
     
     if (backup_auto_enabled === 'true' && backup_auto_cron) {
-      const cronCmd = `cd /root/vitamar-docs && /usr/bin/node src/scripts/backup-auto.js >> /root/vitamar-docs/logs/backup-auto.log 2>&1`;
+      const cronCmd = `cd ${APP_DIR} && /usr/bin/node src/scripts/backup-auto.js >> ${APP_DIR}/logs/backup-auto.log 2>&1`;
       execSync(`(crontab -l 2>/dev/null | grep -v 'backup-auto'; echo "${backup_auto_cron} ${cronCmd}") | crontab -`, { stdio: 'pipe' });
     } else {
       execSync(`crontab -l 2>/dev/null | grep -v 'backup-auto' | crontab -`, { stdio: 'pipe' });
@@ -644,11 +646,11 @@ router.post('/backups-auto/test', requireRol('admin'), async (req, res) => {
       }
       res.json({ ok: true, message: 'Conexión SMB exitosa' });
     } else {
-      const testDir = backupPath || '/mnt/vitamar-nas/backup';
+      const testDir = backupPath || path.join(HOME_DIR, 'backups', 'docflow');
       if (!fs.existsSync(testDir)) {
         return res.status(400).json({ ok: false, error: `Directorio no existe: ${testDir}` });
       }
-      const testFile = path.join(testDir, '.vitamar-test');
+      const testFile = path.join(testDir, '.docflow-test');
       fs.writeFileSync(testFile, 'test');
       fs.unlinkSync(testFile);
       res.json({ ok: true, message: 'Ruta accesible para escritura' });
@@ -665,7 +667,7 @@ router.post('/backups-auto/now', requireRol('admin'), async (req, res) => {
     const path = require('path');
     
     const homeDir = os.homedir();
-    const backupDir = path.join(homeDir, 'backups', 'vitamar-docs');
+    const backupDir = path.join(homeDir, 'backups', 'docflow');
     
     console.log('[Backup] Home dir:', homeDir);
     console.log('[Backup] Backup dir:', backupDir);
@@ -679,7 +681,7 @@ router.post('/backups-auto/now', requireRol('admin'), async (req, res) => {
     
     const fecha = new Date().toISOString().slice(0, 10);
     const timestamp = Date.now();
-    const filename = `vitamar_backup_${fecha}_${timestamp}.zip`;
+    const filename = `docflow_backup_${fecha}_${timestamp}.zip`;
     const backupPath = path.join(backupDir, filename);
     
     const db = require('../db');
@@ -762,15 +764,14 @@ router.put('/cron', requireRol('admin'), async (req, res) => {
   if (cron_notificaciones && !isValidCron(cron_notificaciones)) return res.status(400).json({ error: 'Expresión cron notificaciones inválida' });
   
   try {
-    const SCRIPT_DIR = '/root/vitamar-docs/scripts';
-    const APP_DIR_PATH = '/root/vitamar-docs';
+    const SCRIPT_DIR = path.join(APP_DIR, 'scripts');
     
     const imapCmd = `${SCRIPT_DIR}/cron-imap.sh`;
     const escCmd = `${SCRIPT_DIR}/cron-escalaciones.sh`;
     const dianCmd = `${SCRIPT_DIR}/cron-dian.sh`;
     const notifCmd = `${SCRIPT_DIR}/cron-notificaciones.sh`;
     
-    const lines = ['# Vitamar Docs - Tareas programadas'];
+    const lines = ['# DocFlow - Tareas programadas'];
     
     if (cron_imap) lines.push(`${cron_imap} ${imapCmd}`);
     if (cron_escalaciones) lines.push(`${cron_escalaciones} ${escCmd}`);
@@ -781,7 +782,7 @@ router.put('/cron', requireRol('admin'), async (req, res) => {
     
     console.log('[CRON] New crontab:', newCrontab);
     
-    const cronFile = path.join(APP_DIR_PATH, 'temp_cron.txt');
+    const cronFile = path.join(APP_DIR, 'temp_cron.txt');
     fs.writeFileSync(cronFile, newCrontab);
     console.log('[CRON] File written, running crontab command');
     
