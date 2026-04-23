@@ -9,20 +9,29 @@ let cachedConfig = null;
 async function getConfig() {
   if (cachedConfig) return cachedConfig;
   try {
-    const { rows } = await db.query('SELECT clave, valor FROM configuracion WHERE clave LIKE \'smtp_%\'');
+    const { rows } = await db.query('SELECT clave, valor FROM configuracion WHERE clave LIKE \'smtp_%\' OR clave = \'empresa_nombre\'');
     cachedConfig = {};
     for (const row of rows) {
       cachedConfig[row.clave] = row.valor;
     }
+    if (!cachedConfig.empresa_nombre) {
+      cachedConfig.empresa_nombre = 'DocFlow';
+    }
     return cachedConfig;
   } catch (e) {
     console.error('[SMTP] Error cargando config:', e.message);
-    return {};
+    return { empresa_nombre: 'DocFlow' };
   }
 }
 
 function clearCache() {
   cachedConfig = null;
+}
+
+async function getEmpresaNombre() {
+  const cfg = await getConfig();
+  return cfg.empresa_nombre || 'DocFlow';
+}
   transporter = null;
 }
 
@@ -88,6 +97,8 @@ async function enviar({ para, asunto, html, text }) {
 }
 
 async function enviarRecuperacion(usuario, token, reqHost) {
+  const cfg = await getConfig();
+  const empresaNombre = cfg.empresa_nombre || 'DocFlow';
   const baseUrl = getBaseUrl(reqHost);
   const enlace  = `${baseUrl}/reset-password.html?token=${token}`;
 
@@ -97,7 +108,7 @@ async function enviarRecuperacion(usuario, token, reqHost) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Recuperar contraseña — Vitamar Docs</title>
+  <title>Recuperar contraseña — ${empresaNombre}</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f4f4;font-family:'Segoe UI',Arial,sans-serif">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:30px 15px">
@@ -107,7 +118,7 @@ async function enviarRecuperacion(usuario, token, reqHost) {
           <!-- Header -->
           <tr>
             <td style="background:#1a56db;padding:28px 32px;text-align:center">
-              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:600">Vitamar Docs</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:600">${empresaNombre}</h1>
               <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:13px">Gestión Documental</p>
             </td>
           </tr>
@@ -116,7 +127,7 @@ async function enviarRecuperacion(usuario, token, reqHost) {
             <td style="padding:32px">
               <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:18px;font-weight:600">Hola ${usuario.nombre},</h2>
               <p style="margin:0 0 20px;color:#4a5568;font-size:14px;line-height:1.6">
-                Recibimos una solicitud para restablecer tu contraseña en <strong>Vitamar Docs</strong>.
+                Recibimos una solicitud para restablecer tu contraseña en <strong>${empresaNombre}</strong>.
               </p>
               <p style="margin:0 0 24px;color:#4a5568;font-size:14px;line-height:1.6">
                 Haz clic en el siguiente botón para crear una nueva contraseña. Este enlace es válido por <strong>30 minutos</strong>.
@@ -135,7 +146,7 @@ async function enviarRecuperacion(usuario, token, reqHost) {
               <!-- Warning -->
               <div style="margin-top:28px;padding:14px;background:#fffbeb;border-radius:8px;border-left:3px solid #f59e0b">
                 <p style="margin:0;color:#92400e;font-size:12px;line-height:1.5">
-                  ⚠️ Si no solicitaste este cambio, puedes ignorar este correo con seguridad. Tu contraseña actual no cambiará hasta que uses el enlace.
+                  ⚠️ Si no solicitaste este cambio, puedes ignorar este correo con seguridad. Tu contraseña actual no cambió hasta que uses el enlace.
                 </p>
               </div>
             </td>
@@ -144,7 +155,7 @@ async function enviarRecuperacion(usuario, token, reqHost) {
           <tr>
             <td style="background:#f9fafb;padding:20px 32px;border-top:1px solid #e5e7eb">
               <p style="margin:0;color:#9ca3af;font-size:11px;text-align:center">
-                Este es un mensaje automático de Vitamar Docs. Por favor no respondas a este correo.
+                Este es un mensaje automático de ${empresaNombre}. Por favor no respondas a este correo.
               </p>
             </td>
           </tr>
@@ -157,22 +168,23 @@ async function enviarRecuperacion(usuario, token, reqHost) {
 
   return enviar({
     para:    usuario.email,
-    asunto:  'Recuperar contraseña — Vitamar Docs',
+    asunto:  `Recuperar contraseña — ${empresaNombre}`,
     html,
     text: `Hola ${usuario.nombre},
 
-Recibimos una solicitud para restablecer tu contraseña en Vitamar Docs.
+Recibimos una solicitud para restablecer tu contraseña en ${empresaNombre}.
 
 Para crear una nueva contraseña, visita este enlace (válido por 30 minutos):
 ${enlace}
 
 Si no solicitaste este cambio, puedes ignorar este correo.
 
-— Vitamar Docs`,
+Este es un mensaje automático de ${empresaNombre}. Por favor no respondas a este correo.`
   });
 }
 
 async function enviarNotificacionFactura({ para, tipo, factura, usuario, comentario }) {
+  const empresaNombre = await getEmpresaNombre();
   const colores = {
     recibida:   { bg: '#dbeafe', text: '#1e40af', accent: '#3b82f6' },
     revision:    { bg: '#fef3c7', text: '#92400e', accent: '#f59e0b' },
@@ -194,7 +206,7 @@ async function enviarNotificacionFactura({ para, tipo, factura, usuario, comenta
     escalacion: 'Escalada',
   };
 
-  consttitulos = {
+  const titulos = {
     recibida:   'Nueva factura recibida',
     revision:    'Factura en revisión',
     aprobada:    'Factura aprobada',
@@ -213,7 +225,7 @@ async function enviarNotificacionFactura({ para, tipo, factura, usuario, comenta
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${titulos[tipo] || 'Notificación'} — Vitamar Docs</title>
+  <title>${titulos[tipo] || 'Notificación'} — ${empresaNombre}</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f4f4;font-family:'Segoe UI',Arial,sans-serif">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:30px 15px">
@@ -226,7 +238,7 @@ async function enviarNotificacionFactura({ para, tipo, factura, usuario, comenta
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td>
-                    <h1 style="margin:0;color:#ffffff;font-size:18px;font-weight:600">Vitamar Docs</h1>
+                    <h1 style="margin:0;color:#ffffff;font-size:18px;font-weight:600">${empresaNombre}</h1>
                   </td>
                   <td style="text-align:right">
                     <span style="display:inline-block;background:rgba(255,255,255,0.2);color:#ffffff;font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;text-transform:uppercase;letter-spacing:0.5px">
@@ -313,7 +325,7 @@ async function enviarNotificacionFactura({ para, tipo, factura, usuario, comenta
               <!-- CTA -->
               <div style="text-align:center;margin-top:24px">
                 <a href="${process.env.APP_URL || 'http://localhost:3100'}" style="display:inline-block;background:${c.accent};color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;padding:12px 28px;border-radius:8px">
-                  Ver en Vitamar Docs
+                  Ver en ${empresaNombre}
                 </a>
               </div>
             </td>
@@ -322,7 +334,7 @@ async function enviarNotificacionFactura({ para, tipo, factura, usuario, comenta
           <tr>
             <td style="background:#f9fafb;padding:20px 32px;border-top:1px solid #e5e7eb">
               <p style="margin:0;color:#9ca3af;font-size:11px;text-align:center">
-                Este es un mensaje automático de Vitamar Docs · No respondas a este correo.
+                Este es un mensaje automático de ${empresaNombre} · No respondas a este correo.
               </p>
             </td>
           </tr>
@@ -344,17 +356,18 @@ Valor: ${fmt(factura.valor_total || factura.valor)}
 ${factura.proveedor ? `Proveedor: ${factura.proveedor}` : ''}
 ${comentario ? `\nComentario: ${comentario}` : ''}
 
-Ver en Vitamar Docs: ${process.env.APP_URL || 'http://localhost:3100'}`,
+Ver en ${empresaNombre}: ${process.env.APP_URL || 'http://localhost:3100'}`,
   });
 }
 
 async function enviarTest(para) {
+  const empresaNombre = await getEmpresaNombre();
   const html = `
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Prueba SMTP — Vitamar Docs</title>
+  <title>Prueba SMTP — ${empresaNombre}</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f4f4;font-family:'Segoe UI',Arial,sans-serif">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:40px 15px">
@@ -363,7 +376,7 @@ async function enviarTest(para) {
         <table width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)">
           <tr>
             <td style="background:#10b981;padding:24px 32px;text-align:center">
-              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600">✅ Vitamar Docs</h1>
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600">✅ ${empresaNombre}</h1>
               <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:13px">Prueba de configuración SMTP</p>
             </td>
           </tr>
@@ -379,7 +392,7 @@ async function enviarTest(para) {
           <tr>
             <td style="background:#f9fafb;padding:20px 32px;border-top:1px solid #e5e7eb">
               <p style="margin:0;color:#9ca3af;font-size:11px;text-align:center">
-                Enviado desde Vitamar Docs · ${new Date().toLocaleString('es-CO')}
+                Enviado desde ${empresaNombre} · ${new Date().toLocaleString('es-CO')}
               </p>
             </td>
           </tr>
@@ -392,9 +405,9 @@ async function enviarTest(para) {
 
   return enviar({
     para:    para,
-    asunto:  '✅ Prueba SMTP — Vitamar Docs',
+    asunto:  `✅ Prueba SMTP — ${empresaNombre}`,
     html,
-    text: 'Vitamar Docs - Prueba SMTP\n\n¡Configuración correcta!\n\nEl servidor SMTP está correctamente configurado.',
+    text: `${empresaNombre} - Prueba SMTP\n\n¡Configuración correcta!\n\nEl servidor SMTP está correctamente configurado.`,
   });
 }
 
