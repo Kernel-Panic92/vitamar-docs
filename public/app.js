@@ -1427,7 +1427,14 @@ async function renderCfgTab(cfg){
           <div class="field"><label>PUERTO</label><input type="number" id="cfg-smtp-port" value="${esc(cfg.smtp_port?.valor||'587')}" placeholder="587"/></div>
           <div class="field"><label>USUARIO</label><input type="text" id="cfg-smtp-user" value="${esc(cfg.smtp_user?.valor||'')}" placeholder="notificaciones@dominio.com"/></div>
           <div class="field"><label>CONTRASEÑA</label><input type="password" id="cfg-smtp-pass" value="${esc(cfg.smtp_password?.valor||'')}" placeholder="••••••••"/></div>
-          <div class="field full"><label>REMITENTE (FROM)</label><input type="text" id="cfg-smtp-from" value="${esc(cfg.smtp_from?.valor||'')}" placeholder="DocFlow <notificaciones@dominio.com>"/></div>
+          <div class="field"><label>REMITENTE (FROM)</label><input type="text" id="cfg-smtp-from" value="${esc(cfg.smtp_from?.valor||'')}" placeholder="notificaciones@dominio.com"/></div>
+          <div class="field">
+            <label>ENCRIPTACIÓN</label>
+            <select id="cfg-smtp-secure">
+              <option value="false" ${cfg.smtp_secure?.valor!=='true'?'selected':''}>STARTTLS (puerto 587)</option>
+              <option value="true" ${cfg.smtp_secure?.valor==='true'?'selected':''}>SSL (puerto 465)</option>
+            </select>
+          </div>
         </div>
         <div style="display:flex;gap:10px;margin-top:20px">
           <button class="btn btn-primary" onclick="guardarCfg('smtp')">💾 Guardar</button>
@@ -1625,6 +1632,7 @@ async function guardarCfg(tab){
     data.smtp_user=$('cfg-smtp-user')?.value?.trim()||'';
     data.smtp_password=$('cfg-smtp-pass')?.value||'';
     data.smtp_from=$('cfg-smtp-from')?.value?.trim()||'';
+    data.smtp_secure=$('cfg-smtp-secure')?.value||'false';
   }else if(tab==='horas'){
     data.horas_limite_revision=$('cfg-horas-revision')?.value?.trim()||'24';
     data.horas_escalacion_nivel2=$('cfg-horas-nivel2')?.value?.trim()||'48';
@@ -1790,11 +1798,12 @@ async function testSmtp(){
   const user=$('cfg-smtp-user')?.value?.trim();
   const pass=$('cfg-smtp-pass')?.value;
   const from=$('cfg-smtp-from')?.value?.trim();
+  const secure=$('cfg-smtp-secure')?.value;
   const el=$('cfg-test-smtp');
   if(!host||!user||!pass){el.innerHTML='<span style="color:var(--danger)">Completa host, usuario y contraseña</span>';return}
   el.innerHTML='<span style="color:var(--muted)">Probando conexión...</span>';
   try{
-    const r=await api('GET',`/configuracion/smtp/test?host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}&user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}&from=${encodeURIComponent(from)}`);
+    const r=await api('GET',`/configuracion/smtp/test?host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}&user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}&from=${encodeURIComponent(from)}&secure=${encodeURIComponent(secure)}`);
     el.innerHTML='<span style="color:var(--success)">✓ Configuración SMTP correcta</span>';
   }catch(e){
     el.innerHTML=`<span style="color:var(--danger)">✗ Error: ${esc(e.message)}</span>`;
