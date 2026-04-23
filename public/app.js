@@ -233,7 +233,7 @@ async function rDash(){
   const r=d.resumen;
   const rol=S.usuario?.rol;
   const esComprador=rol==='comprador';
-  const esTesorero=['tesorero'].includes(rol);
+  const esTesorero=['tesorero','admin'].includes(rol);
   const sync=await checkSyncStatus();
   if(sync.sincronizando){
     startSyncPoll();
