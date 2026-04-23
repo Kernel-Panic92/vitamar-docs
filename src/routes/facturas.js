@@ -102,32 +102,32 @@ router.get('/pendientes', requireRol('admin','contador','tesorero','comprador','
           WHEN f.limite_dian IS NOT NULL AND f.limite_dian <= $3 THEN 'alerta'
           WHEN f.estado = 'causada' AND f.soporte_pago IS NULL THEN 'alerta'
           WHEN f.estado = 'revision' AND f.recibida_en < $4 THEN 'alerta'
-          WHEN f.estado = 'causada' OR f.estado = 'aprobada' THEN 'sinpagar'
-          WHEN f.estado = 'revision' OR f.estado = 'recibida' THEN 'sinaprobar'
+          WHEN f.estado IN ('causada','aprobada') THEN 'sinpagar'
+          WHEN f.estado IN ('revision','recibida') THEN 'sinaprobar'
           ELSE 'normal'
         END AS prioridad,
         CASE
           WHEN f.limite_dian IS NOT NULL THEN 'dian'
           WHEN f.estado = 'causada' AND f.soporte_pago IS NULL THEN 'soporte'
           WHEN f.estado = 'revision' THEN 'revision'
-          WHEN f.estado = 'causada' OR f.estado = 'aprobada' THEN 'sinpagar'
-          WHEN f.estado = 'recibida' OR f.estado = 'revision' THEN 'sinaprobar'
+          WHEN f.estado IN ('causada','aprobada') THEN 'sinpagar'
+          WHEN f.estado IN ('recibida','revision') THEN 'sinaprobar'
           ELSE 'normal'
         END AS tipo_urgencia
        FROM facturas f
        LEFT JOIN proveedores p ON p.id = f.proveedor_id
        LEFT JOIN categorias_compra c ON c.id = f.categoria_id
        LEFT JOIN areas a ON a.id = f.area_responsable_id
-       WHERE f.estado NOT IN ('pagada')
-       ORDER BY 
-         CASE 
-           WHEN f.limite_dian IS NOT NULL AND f.limite_dian <= $2 THEN 1 
-           WHEN f.limite_dian IS NOT NULL AND f.limite_dian <= $3 THEN 2 
-           WHEN f.estado = 'revision' OR f.estado = 'recibida' THEN 3
-           WHEN f.estado = 'causada' AND f.soporte_pago IS NULL THEN 4
-           WHEN f.estado = 'causada' OR f.estado = 'aprobada' THEN 5
-           ELSE 6 
-         END,
+       WHERE f.estado <> 'pagada'
+ORDER BY 
+          CASE 
+            WHEN f.limite_dian IS NOT NULL AND f.limite_dian <= $2 THEN 1 
+            WHEN f.limite_dian IS NOT NULL AND f.limite_dian <= $3 THEN 2 
+            WHEN f.estado IN ('revision','recibida') THEN 3
+            WHEN f.estado = 'causada' AND f.soporte_pago IS NULL THEN 4
+            WHEN f.estado IN ('causada','aprobada') THEN 5
+            ELSE 6 
+          END,
          f.limite_dian ASC NULLS LAST,
          f.recibida_en DESC
        LIMIT 200`,
