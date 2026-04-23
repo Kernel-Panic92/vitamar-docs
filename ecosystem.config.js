@@ -2,7 +2,7 @@
 module.exports = {
   apps: [
     {
-      name:         'vitamar-docs',
+      name:         'docflow',
       script:       './src/server.js',
       exec_mode:    'fork',
       instances:    1,

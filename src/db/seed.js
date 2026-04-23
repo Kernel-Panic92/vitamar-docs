@@ -12,11 +12,11 @@ async function seed() {
     // ─── Áreas ────────────────────────────────────────────────────────────────
     console.log('  → Áreas...');
     const areasData = [
-      { nombre: 'Sistemas',             email: 'sistemas@vitamar.com' },
-      { nombre: 'Dirección de Planta', email: 'planta@vitamar.com' },
-      { nombre: 'Logística',           email: 'logistica@vitamar.com' },
-      { nombre: 'Contabilidad',        email: 'contabilidad@vitamar.com' },
-      { nombre: 'Gerencia',            email: 'gerencia@vitamar.com' },
+      { nombre: 'Sistemas',             email: 'sistemas@docflow.com' },
+      { nombre: 'Dirección de Planta', email: 'planta@docflow.com' },
+      { nombre: 'Logística',           email: 'logistica@docflow.com' },
+      { nombre: 'Contabilidad',        email: 'contabilidad@docflow.com' },
+      { nombre: 'Gerencia',            email: 'gerencia@docflow.com' },
     ];
 
     const areaIds = {};
@@ -34,17 +34,17 @@ async function seed() {
 
     // ─── Usuario admin ─────────────────────────────────────────────────────────
     console.log('\n  → Usuario administrador...');
-    const hash = await bcrypt.hash('vitamar2025', 12);
+    const hash = await bcrypt.hash('docflow2025', 12);
     const adminAreaId = areaIds['Sistemas'];
     const adminRes = await client.query(
       `INSERT INTO usuarios (nombre, email, password_hash, rol, area_id)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (email) DO UPDATE SET password_hash=$3, rol=$4
        RETURNING id`,
-      ['Administrador', 'admin@vitamar.com', hash, 'admin', adminAreaId]
+      ['Administrador', 'admin@docflow.com', hash, 'admin', adminAreaId]
     );
     const adminId = adminRes.rows[0].id;
-    console.log('     ✓ admin@vitamar.com');
+    console.log('     ✓ admin@docflow.com');
 
     // Asignar admin como jefe de Sistemas
     try {
@@ -131,8 +131,8 @@ async function seed() {
     await client.query('COMMIT');
     console.log('\n✅ Seed completado.\n');
     console.log('  Acceso inicial:');
-    console.log('    Email:    admin@vitamar.com');
-    console.log('    Password: vitamar2025');
+    console.log('    Email:    admin@docflow.com');
+    console.log('    Password: docflow2025');
     console.log('  ⚠️  Cambia la contraseña en el primer acceso.\n');
 
   } catch (err) {

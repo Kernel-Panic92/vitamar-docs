@@ -1,7 +1,7 @@
 {
-  "name": "vitamar-docs",
+  "name": "docflow",
   "version": "1.0.0",
-  "description": "Gestión documental de facturas electrónicas - Vitamar",
+  "description": "Gestión documental de facturas electrónicas - DocFlow",
   "author": "Kernel-Panic92",
   "main": "src/server.js",
   "scripts": {
