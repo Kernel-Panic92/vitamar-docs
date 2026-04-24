@@ -742,37 +742,30 @@ router.post('/backups-auto/now', requireRol('admin'), async (req, res) => {
     
     // Verificar si hay NAS configurado para copiar ahí también
     try {
-      const { rows } = await db.query(
-        `SELECT valor FROM configuracion WHERE clave = 'backup_auto_enabled'`
+      const cfgRows = await db.query(
+        `SELECT clave, valor FROM configuracion 
+         WHERE clave IN ('backup_auto_type','backup_auto_path','backup_auto_host','backup_auto_user','backup_auto_pass')`
       );
-      const nasEnabled = rows[0]?.valor === 'true';
+      const cfg = {};
+      for (const row of cfgRows) cfg[row.clave] = row.valor;
       
-      if (nasEnabled) {
-        const cfgRows = await db.query(
-          `SELECT clave, valor FROM configuracion 
-           WHERE clave IN ('backup_auto_type','backup_auto_path','backup_auto_host','backup_auto_user','backup_auto_pass')`
-        );
-        const cfg = {};
-        for (const row of cfgRows) cfg[row.clave] = row.valor;
+      if (cfg.backup_auto_type === 'smb' && cfg.backup_auto_host) {
+        console.log('[Backup] Copiando a NAS...');
+        const nasHost = cfg.backup_auto_host.replace(/[^a-zA-Z0-9._\-]/g, '');
+        const nasUser = (cfg.backup_auto_user || '').replace(/[^a-zA-Z0-9._\-@]/g, '');
+        const nasPass = (cfg.backup_auto_pass || '').replace(/["`$]/g, '');
+        const nasPath = (cfg.backup_auto_path || '').replace(/\\/g, '/');
         
-        if (cfg.backup_auto_type === 'smb' && cfg.backup_auto_host) {
-          console.log('[Backup] Copiando a NAS...');
-          const nasHost = cfg.backup_auto_host.replace(/[^a-zA-Z0-9._\-]/g, '');
-          const nasUser = (cfg.backup_auto_user || '').replace(/[^a-zA-Z0-9._\-@]/g, '');
-          const nasPass = (cfg.backup_auto_pass || '').replace(/["`$]/g, '');
-          const nasPath = (cfg.backup_auto_path || '').replace(/\\/g, '/');
-          
-          // Usar smbclient para copiar
-          const nasDest = `//${nasHost}${nasPath}`;
-          const cmd = `smbclient "${nasDest}" -U ${nasUser}${nasPass ? '%' + nasPass} -c "put ${filename}" < "${backupPath}" 2>&1`;
-          console.log('[Backup] CMD:', cmd);
-          
-          const copyResult = execSync(cmd, { stdio: 'pipe', timeout: 60 }).toString();
-          console.log('[Backup] NAS copy result:', copyResult);
-          
-          if (!copyResult.includes('OK') && !copyResult.includes('putting')) {
-            console.log('[Backup] Warning: NAS copy may have failed');
-          }
+        // Usar smbclient para copiar
+        const nasDest = `//${nasHost}${nasPath}`;
+        const cmd = `smbclient "${nasDest}" -U ${nasUser}${nasPass ? '%' + nasPass} -c "put ${filename}" < "${backupPath}" 2>&1`;
+        console.log('[Backup] CMD:', cmd);
+        
+        const copyResult = execSync(cmd, { stdio: 'pipe', timeout: 60 }).toString();
+        console.log('[Backup] NAS copy result:', copyResult);
+        
+        if (!copyResult.includes('OK') && !copyResult.includes('putting')) {
+          console.log('[Backup] Warning: NAS copy may have failed');
         }
       }
     } catch (nasErr) {
