@@ -335,6 +335,8 @@ router.post('/updater/check', requireRol('admin'), async (req, res) => {
     const currentCommit = execSync('git rev-parse --short HEAD', { cwd: APP_DIR }).toString().trim();
     const remoteCommit = execSync('git rev-parse --short origin/main', { cwd: APP_DIR }).toString().trim();
     
+    logUpdater(`Local: ${currentCommit} | Remote: ${remoteCommit}`);
+    
     const behind = currentCommit !== remoteCommit ? 1 : 0;
     
     let changes = [];
