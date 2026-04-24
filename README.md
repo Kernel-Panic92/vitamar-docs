@@ -1,4 +1,4 @@
-# DocFlow 1.1.10
+# DocFlow
 
 Sistema de gestión documental para facturas electrónicas colombianas (DIAN). Importa automáticamente facturas desde correo IMAP, las procesa mediante un flujo de aprobación configurable y las envía a causación y pago.
 
