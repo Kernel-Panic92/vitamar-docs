@@ -1924,12 +1924,12 @@ async function checkUpdates(){
       ncEl.style.display='none';
       const changesEl=$('update-changes');
       changesEl.innerHTML=`<strong>${r.commitsBehind}</strong> actualización(es) pendiente(s)<br>`+
+        `<div style="margin-left:12px;margin-top:8px;color:#0f0">🔄 Local: ${r.currentCommit} → Remote: ${r.remoteCommit}</div>`+
         (r.changes||[]).map(c=>`<div style="margin-left:12px;margin-top:4px">• ${esc(c)}</div>`).join('');
-    }else{
+}else{
       avEl.style.display='none';
       ncEl.style.display='block';
     }
-    await cargarLogActualizacion();
   }catch(e){
     toast('Error verificando: '+e.message,'error');
   }finally{
