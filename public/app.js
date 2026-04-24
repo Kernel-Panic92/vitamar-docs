@@ -1646,6 +1646,7 @@ async function renderCfgTab(cfg){
               <option value="smb" ${r.config?.backup_auto_type==='smb'?'selected':''}>SMB/CIFS (Windows/NAS)</option>
             </select>
           </div>
+          <div class="field full" id="cfg-nas-path-wrap" style="display:${r.config?.backup_auto_type==='smb'?'block':'none'}"><label>RUTA COMPARTIDA</label><input type="text" id="cfg-backup-auto-path" value="${r.config?.backup_auto_path||''}" placeholder="//192.168.0.10/nas"/></div>
           <div class="field full" id="cfg-nas-host-wrap" style="display:${r.config?.backup_auto_type==='smb'?'block':'none'}"><label>SERVIDOR SMB</label><input type="text" id="cfg-backup-auto-host" value="${r.config?.backup_auto_host||''}" placeholder="//192.168.1.100/backup"/></div>
           <div class="field" id="cfg-nas-user-wrap" style="display:${r.config?.backup_auto_type==='smb'?'block':'none'}"><label>USUARIO</label><input type="text" id="cfg-backup-auto-user" value="${r.config?.backup_auto_user||''}" placeholder="admin"/></div>
           <div class="field" id="cfg-nas-pass-wrap" style="display:${r.config?.backup_auto_type==='smb'?'block':'none'}"><label>CONTRASEÑA</label><input type="password" id="cfg-backup-auto-pass" value="${r.config?.backup_auto_pass||''}" placeholder="••••••••"/></div>
@@ -1784,7 +1785,7 @@ async function testBackupPath(){
 
 function toggleNasCreds(){
   const type=$('cfg-backup-auto-type')?.value;
-  const wrap=['cfg-nas-host-wrap','cfg-nas-user-wrap','cfg-nas-pass-wrap'];
+  const wrap=['cfg-nas-path-wrap','cfg-nas-host-wrap','cfg-nas-user-wrap','cfg-nas-pass-wrap'];
   wrap.forEach(id=>{const el=$(id);if(el)el.style.display=type==='smb'?'block':'none'});
   const testBtn=$('cfg-nas-test-btn');
   if(testBtn)testBtn.style.display=type==='smb'?'inline-flex':'none';
