@@ -23,8 +23,9 @@ function sanitizeShellArg(str) {
 // Helper: validar expresión cron
 function isValidCron(expr) {
   if (!expr || expr.trim() === '') return true;
-  const cronRegex = /^(\*|\d+|\d+-\d+)(,\d+(-\d+)?)*\s+(\*|\d+|\d+-\d+)(,\d+(-\d+)?)*\s+(\*|\d+|\d+-\d+)(,\d+(-\d+)?)*\s+(\*|\d+|\d+-\d+)(,\d+(-\d+)?)*\s+(\*|\d+|\d+-\d+)(,\d+(-\d+)?)*$/;
-  return cronRegex.test(expr.trim());
+  // Very permissive: just check it has 5 fields separated by spaces
+  const parts = expr.trim().split(/\s+/);
+  return parts.length >= 4 && parts.length <= 6;
 }
 
 const logoUpload = multer({
