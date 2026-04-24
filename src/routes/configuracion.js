@@ -306,20 +306,7 @@ function getUpdaterLog() {
   } catch (e) {
     console.log('[UPDATER ERROR reading log]', e.message);
   }
-  return debugLog || 'Sin registros';
-}
-  console.log(`[Updater] ${msg}`);
-}
-
-function getUpdaterLog() {
-  try {
-    if (fs.existsSync(UPDATER_LOG)) {
-      const content = fs.readFileSync(UPDATER_LOG, 'utf8');
-      const lines = content.split('\n').filter(l => l.trim()).slice(-100);
-      return lines.join('\n');
-    }
-  } catch (e) {}
-  return '';
+return debugLog || 'Sin registros';
 }
 
 function asyncExec(cmd) {
