@@ -716,7 +716,6 @@ router.get('/backups-auto/progreso', requireRol('admin'), (req, res) => {
 router.get('/backups-auto/lista', requireRol('admin'), (req, res) => {
   res.redirect(307, '/api/backup/lista');
 });
-});
 
 // ─── TAREAS CRON ────────────────────────────────────────────────────────────
 router.get('/cron', requireRol('admin'), async (req, res) => {
