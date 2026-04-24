@@ -346,7 +346,7 @@ router.post('/updater/check', requireRol('admin'), async (req, res) => {
     logUpdater('Verificando actualizaciones...');
     
     // Force fetch all remotes and prune to get latest refs
-    execSync('git fetch origin --all --prune', { cwd: APP_DIR, stdio: 'pipe' });
+    execSync('git fetch origin --prune', { cwd: APP_DIR, stdio: 'pipe' });
     
     const currentCommit = execSync('git rev-parse --short HEAD', { cwd: APP_DIR }).toString().trim();
     const remoteCommit = execSync('git rev-parse --short origin/main', { cwd: APP_DIR }).toString().trim();
