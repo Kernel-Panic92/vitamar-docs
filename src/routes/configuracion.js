@@ -642,6 +642,8 @@ router.put('/backups-auto', requireRol('admin'), async (req, res) => {
 router.post('/backups-auto/test', requireRol('admin'), async (req, res) => {
   let { path: backupPath, type, host, user, pass } = req.body;
   
+  console.log('[DEBUG] SMB test received:', { backupPath, type, host, user, pass: pass ? '***' : '(empty)' });
+  
   if (!host || !user) {
     return res.status(400).json({ ok: false, error: 'Faltan parámetros requeridos' });
   }
