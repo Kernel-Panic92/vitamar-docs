@@ -29,12 +29,12 @@
     "multer": "^2.1.1",
     "imapflow": "^1.0.162",
     "mailparser": "^3.7.1",
-    "uuid": "^11.0.0"
+    "uuid": "^11.0.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
   },
   "overrides": {
-    "uuid": "^11.0.0"
+    "uuid": "^11.0.5"
   }
 }
