@@ -702,111 +702,19 @@ router.post('/backups-auto/test', requireRol('admin'), async (req, res) => {
   }
 });
 
-router.post('/backups-auto/now', requireRol('admin'), async (req, res) => {
-  console.log('[DEBUG] ==================== BACKUP NOW START ====================');
-  
-  // Responder inmediatamente
-  res.json({ ok: true, message: 'Backup iniciado en segundo plano', filename: '' });
-  
-  // Ejecutar después de enviar respuesta
-  process.nextTick(() => {
-    (async () => {
-    try {
-    const { execSync: exec } = require('child_process');
-    const os = require('os');
-    const path = require('path');
-    
-    const homeDir = os.homedir();
-    const backupDir = path.join(homeDir, 'backups', 'docflow');
-    
-    console.log('[Backup] Home dir:', homeDir);
-    console.log('[Backup] Backup dir:', backupDir);
-    
-    const fs = require('fs');
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
-      console.log('[Backup] Directorio creado');
-    }
-    
-    const fecha = new Date().toISOString().slice(0, 10);
-    const timestamp = Date.now();
-    const filename = `docflow_backup_${fecha}_${timestamp}.zip`;
-    const backupPath = path.join(backupDir, filename);
-    
-    const db = require('../db');
-    const AdmZip = require('adm-zip');
-    
-    const zip = new AdmZip();
-    
-    const agregarQuery = async (sql, nombre) => {
-      try {
-        const { rows } = await db.query(sql);
-        zip.addFile(`${nombre}.json`, Buffer.from(JSON.stringify(rows, null, 2), 'utf8'));
-      } catch (e) {
-        console.log(`[Backup] Error ${nombre}: ${e.message}`);
-      }
-    };
-    
-    await agregarQuery('SELECT * FROM facturas ORDER BY recibida_en DESC LIMIT 2000', 'facturas');
-    await agregarQuery('SELECT * FROM eventos_flujo ORDER BY creado_en DESC LIMIT 5000', 'eventos');
-    await agregarQuery('SELECT * FROM proveedores', 'proveedores');
-    await agregarQuery('SELECT clave, valor FROM configuracion', 'configuracion');
-    await agregarQuery('SELECT id, nombre, email, rol, activo, cambio_password, creado_en FROM usuarios', 'usuarios');
-    
-    const uploadsDir = path.join(APP_DIR, 'uploads');
-    if (fs.existsSync(uploadsDir)) {
-      const files = fs.readdirSync(uploadsDir);
-      if (files.length > 0) {
-        console.log('[Backup] Agregando', files.length, 'archivos de uploads');
-        zip.addLocalFolder(uploadsDir, 'uploads');
-      }
-    }
-    
-    zip.writeZip(backupPath);
-    console.log('[Backup] Archivo escrito:', backupPath);
-    console.log('[Backup] Existe archivo:', fs.existsSync(backupPath));
-    
-    // Copiar a NAS
-    try {
-      const cfgRows = await db.query(
-        `SELECT clave, valor FROM configuracion 
-         WHERE clave IN ('backup_auto_type','backup_auto_path','backup_auto_host','backup_auto_user','backup_auto_pass')`
-      );
-      const cfg = {};
-      for (const row of cfgRows) cfg[row.clave] = row.valor;
-      
-      console.log('[Backup] NAS config:', JSON.stringify(cfg));
-      
-      if (cfg.backup_auto_type === 'smb' && cfg.backup_auto_host) {
-        console.log('[Backup] Copiando a NAS...');
-        const nasHost = cfg.backup_auto_host.replace(/[^a-zA-Z0-9._\-]/g, '');
-        const nasUser = (cfg.backup_auto_user || '').replace(/[^a-zA-Z0-9._\-@]/g, '');
-        const nasPass = (cfg.backup_auto_pass || '').replace(/["`$]/g, '');
-        const nasPath = (cfg.backup_auto_path || '').replace(/\\/g, '/');
-        const remoteName = filename;
-        
-        const nasDest = `//${nasHost}${nasPath}`;
-        const userArg = nasUser + (nasPass ? '%' + nasPass : '');
-        const cmd = `smbclient "${nasDest}" -U "${userArg}" -c "put ${backupPath} ${remoteName}"`;
-        console.log('[Backup] CMD:', cmd);
-        
-        const copyResult = execSync(cmd, { stdio: 'pipe', timeout: 300 }).toString();
-        console.log('[Backup] NAS copy result:', copyResult);
-        
-        if (!copyResult.includes('OK') && !copyResult.includes('putting')) {
-          console.log('[Backup] Warning: NAS copy may have failed');
-        }
-      }
-    } catch (nasErr) {
-      console.log('[Backup] NAS copy error:', nasErr.message);
-    }
-    
-    console.log('[Backup] === BACKUP COMPLETADO ===');
-    } catch (e) {
-      console.error('[Backup] Error general:', e.message);
-    }
-    })();
-  });
+router.post('/backups-auto/now', requireRol('admin'), (req, res) => {
+  // Delegar al endpoint de backup existente
+  res.redirect(307, '/api/backup?action=generate&tipo=completo');
+});
+
+// GET /api/backups-auto/progreso — polling de progreso del backup
+router.get('/backups-auto/progreso', requireRol('admin'), (req, res) => {
+  res.redirect(307, '/api/backup/progreso');
+});
+
+// GET /api/backups-auto/lista — lista backups locales
+router.get('/backups-auto/lista', requireRol('admin'), (req, res) => {
+  res.redirect(307, '/api/backup/lista');
 });
 });
 

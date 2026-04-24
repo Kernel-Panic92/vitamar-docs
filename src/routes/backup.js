@@ -161,7 +161,7 @@ async function generarZip(tipo = 'completo', timestamp = Date.now()) {
 // GET /api/backup — dos pasos: generar y luego descargar
 // Paso 1: /api/backup?action=generate&tipo=config|completo -> devuelve filename
 // Paso 2: /api/backup?action=download&filename=xxx -> descarga el archivo
-router.get('/', soloAdmin, async (req, res) => {
+router.all('/', soloAdmin, async (req, res) => {
   const action = req.query.action;
   const timestamp = Date.now();
 
@@ -205,6 +205,37 @@ router.get('/', soloAdmin, async (req, res) => {
     
     const size = fs.statSync(filepath).size;
     console.log('[Backup] Guardado, size:', size);
+    
+    // Copiar a NAS si está configurado
+    try {
+      const cfgRows = await db.query(
+        `SELECT clave, valor FROM configuracion 
+         WHERE clave IN ('backup_auto_type','backup_auto_path','backup_auto_host','backup_auto_user','backup_auto_pass')`
+      );
+      const cfg = {};
+      for (const row of cfgRows) cfg[row.clave] = row.valor;
+      
+      if (cfg.backup_auto_type === 'smb' && cfg.backup_auto_host) {
+        console.log('[Backup] Copiando a NAS...');
+        const nasHost = cfg.backup_auto_host.replace(/[^a-zA-Z0-9._\-]/g, '');
+        const nasUser = (cfg.backup_auto_user || '').replace(/[^a-zA-Z0-9._\-@]/g, '');
+        const nasPass = (cfg.backup_auto_pass || '').replace(/["`$]/g, '');
+        const nasPath = (cfg.backup_auto_path || '').replace(/\\/g, '/');
+        
+        const nasDest = `//${nasHost}${nasPath}`;
+        const userArg = nasUser + (nasPass ? '%' + nasPass : '');
+        const cmd = `smbclient "${nasDest}" -U "${userArg}" -c "put ${filepath} ${filename}"`;
+        
+        const copyResult = execSync(cmd, { stdio: 'pipe', timeout: 300 }).toString();
+        console.log('[Backup] NAS copy result:', copyResult);
+        
+        if (!copyResult.includes('OK') && !copyResult.includes('putting')) {
+          console.log('[Backup] Warning: NAS copy may have failed');
+        }
+      }
+    } catch (nasErr) {
+      console.log('[Backup] NAS copy error:', nasErr.message);
+    }
     
     backupProgress = { total: 0, current: 0, message: '', stage: '' };
     
