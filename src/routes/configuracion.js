@@ -708,8 +708,9 @@ router.post('/backups-auto/now', requireRol('admin'), async (req, res) => {
   // Responder inmediatamente
   res.json({ ok: true, message: 'Backup iniciado en segundo plano', filename: '' });
   
-  // Ejecutar en proceso separado (IIFE) - no espera, solo lanza
-  (async () => {
+  // Ejecutar después de enviar respuesta
+  process.nextTick(() => {
+    (async () => {
     try {
     const { execSync: exec } = require('child_process');
     const os = require('os');
@@ -804,7 +805,8 @@ router.post('/backups-auto/now', requireRol('admin'), async (req, res) => {
     } catch (e) {
       console.error('[Backup] Error general:', e.message);
     }
-  })();
+    })();
+  });
 });
 });
 
