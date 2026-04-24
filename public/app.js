@@ -1817,13 +1817,13 @@ async function generarBackupServidor(){
   btn.disabled=true;
   btn.textContent='Generando...';
   try{
-    const r=await api('POST','/api/backup?action=generate&tipo=completo');
+    const r=await api('POST','/backup?action=generate&tipo=completo');
     if(progDiv)progDiv.style.display='block';
     let attempts=0;
     const poll=setInterval(async()=>{
       attempts++;
       try{
-        const p=await api('GET','/api/backup/progreso');
+        const p=await api('GET','/backup/progreso');
         if(progDiv){
           progDiv.innerHTML=`<div style="font-size:12px;color:var(--accent)">${p.message||p.stage||'Generando...'} ${p.total?Math.round(p.current*100/p.total)+'%':''}</div>
             <div style="background:var(--surface2);border-radius:4px;height:6px;margin-top:4px;overflow:hidden">
