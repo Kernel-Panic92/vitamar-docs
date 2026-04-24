@@ -1769,15 +1769,22 @@ async function f2bAction(action){
 
 async function testBackupPath(){
   const path=$('cfg-backup-auto-path')?.value?.trim();
-  if(!path){toast('Ingresa la ruta','error');return}
   const type=$('cfg-backup-auto-type')?.value;
-  const data={path,type};
+  const host=$('cfg-backup-auto-host')?.value?.trim();
+  const user=$('cfg-backup-auto-user')?.value?.trim();
+  const pass=$('cfg-backup-auto-pass')?.value;
+  
+  console.log('[DEBUG] testBackupPath:', { path, type, host, user, pass: pass ? '***' : '(empty)' });
+  
+  if(!path && type === 'smb'){toast('Ingresa la ruta','error');return}
+  const data={path: path || '', type};
   if(type==='smb'){
-    data.host=$('cfg-backup-auto-host')?.value?.trim();
-    data.user=$('cfg-backup-auto-user')?.value?.trim();
-    data.pass=$('cfg-backup-auto-pass')?.value;
+    data.host=host;
+    data.user=user;
+    data.pass=pass;
   }
   try{
+    console.log('[DEBUG] Sending:', JSON.stringify(data));
     const r=await api('POST','/configuracion/backups-auto/test',data);
     toast('Conexión exitosa','success');
   }catch(e){toast(e.message,'error')}
