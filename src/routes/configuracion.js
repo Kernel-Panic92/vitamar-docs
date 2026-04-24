@@ -708,6 +708,8 @@ router.post('/backups-auto/now', requireRol('admin'), async (req, res) => {
   // Responder inmediatamente - el backup corre en background
   res.json({ ok: true, message: 'Backup iniciado en segundo plano', filename: '' });
   
+  // Ejecutar en background usando setImmediate
+  setImmediate(async () => {
   const { execSync: exec } = require('child_process');
   const os = require('os');
   const path = require('path');
@@ -800,7 +802,8 @@ router.post('/backups-auto/now', requireRol('admin'), async (req, res) => {
     console.log('[Backup] NAS copy error:', nasErr.message);
   }
   
-console.log('[Backup] === BACKUP COMPLETADO ===');
+  console.log('[Backup] === BACKUP COMPLETADO ===');
+  });
 });
 
 // ─── TAREAS CRON ────────────────────────────────────────────────────────────
