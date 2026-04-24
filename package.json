@@ -25,11 +25,11 @@
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.12.0",
     "node-cron": "^3.0.3",
-    "nodemailer": "^6.9.16",
-    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^8.0.5",
+    "multer": "^2.1.1",
     "imapflow": "^1.0.162",
     "mailparser": "^3.7.1",
-    "uuid": "^10.0.0"
+    "uuid": "^11.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
