@@ -1,5 +1,21 @@
 # DocFlow - Changelog
 
+## v1.1.12 - Updater Fix
+Fecha: 2026-04-24
+
+### Updater (Fix crítico)
+- ✅ Fix: git fetch con flag inválido `--all` → usar solo `git fetch origin --prune`
+- ✅ Mostrar commits local y remote directamente en la UI
+- ✅ No depende de archivo de log (funciona sin permisos de escritura en logs/)
+- ✅ Detecta nueva versión correctamente
+
+## v1.1.11 - Updater Improvements
+Fecha: 2026-04-24
+
+### Updater
+- ✅ Log local y remote commits en verificación
+- ✅ Añadir remoteCommit a la respuesta del API
+
 ## v1.1.10 - Updater Fix
 Fecha: 2026-04-24
 
@@ -9,6 +25,20 @@ Fecha: 2026-04-24
 - ✅ Show actual commit hash when update available
 
 ## v1.1.9 - NAS Backup Fixes
+Fecha: 2026-04-24
+
+### NAS Backup Configuration
+- ✅ Added RUTA COMPARTIDA input field (was missing)
+- ✅ Fix sanitizeShellArg corrupting "nas" in paths (nas → as)
+- ✅ Backup now copies to NAS using smbclient
+- ✅ Allow guest access without password
+- ✅ Fix host sanitization preserving dots (192.168.0.10)
+
+### IMAP Sync
+- ✅ Fix cron validation allowing */120 format
+- ✅ Allow empty cron to disable sync
+
+## v1.1.8 - SMTP & UI Improvements
 Fecha: 2026-04-24
 
 ### NAS Backup Configuration
