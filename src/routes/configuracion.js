@@ -22,9 +22,8 @@ function sanitizeShellArg(str) {
 
 // Helper: validar expresión cron
 function isValidCron(expr) {
-  if (!expr || expr.trim() === '') return true; // Empty is valid (disabled)
-  // Allow formats like: */15 * * * *, 0 */120 * * *, etc
-  const cronRegex = /^(\*|(\d+(-\d+)?)(,\d+(-\d+)?)*)\s+(\*|(\d+(-\d+)?)(,\d+(-\d+)?)*)\s+(\*|\d+(-\d+)?)(,\d+(-\d+)?)*\s+(\*|\d+(-\d+)?)(,\d+(-\d+)?)*)\s+(\*|\d+(-\d+)?)(,\d+(-\d+)?)*$/;
+  if (!expr || expr.trim() === '') return true;
+  const cronRegex = /^(\*|\d+|\d+-\d+)(,\d+(-\d+)?)*\s+(\*|\d+|\d+-\d+)(,\d+(-\d+)?)*\s+(\*|\d+|\d+-\d+)(,\d+(-\d+)?)*\s+(\*|\d+|\d+-\d+)(,\d+(-\d+)?)*\s+(\*|\d+|\d+-\d+)(,\d+(-\d+)?)*$/;
   return cronRegex.test(expr.trim());
 }
 
