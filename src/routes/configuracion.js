@@ -656,9 +656,10 @@ router.post('/backups-auto/test', requireRol('admin'), async (req, res) => {
       
       // Try smbclient first (always available on Linux with samba-client)
       const share = backupPath || '/';
+      const userArg = user + (pass ? '%' + pass : '');
       let test;
       try {
-        test = execSync(`smbclient //${host}${share} -U ${user}${pass ? '%' + pass : ''} -c "ls" 2>&1`, { stdio: 'pipe', timeout: 10 }).toString();
+        test = execSync(`smbclient //${host}${share} -U "${userArg}" -c "ls" 2>&1`, { stdio: 'pipe', timeout: 10 }).toString();
       } catch(e) {
         test = e.stdout?.toString() || e.message || 'FAIL';
       }
@@ -758,7 +759,8 @@ router.post('/backups-auto/now', requireRol('admin'), async (req, res) => {
         
         // Usar smbclient para copiar
         const nasDest = `//${nasHost}${nasPath}`;
-        const cmd = `smbclient "${nasDest}" -U ${nasUser}${nasPass ? '%' + nasPass} -c "put ${filename}" < "${backupPath}" 2>&1`;
+        const userArg = nasUser + (nasPass ? '%' + nasPass : '');
+        const cmd = `smbclient "${nasDest}" -U "${userArg}" -c "put ${filename}" < "${backupPath}" 2>&1`;
         console.log('[Backup] CMD:', cmd);
         
         const copyResult = execSync(cmd, { stdio: 'pipe', timeout: 60 }).toString();
