@@ -352,6 +352,7 @@ router.post('/updater/check', requireRol('admin'), async (req, res) => {
       hasUpdates: behind > 0,
       commitsBehind: behind,
       currentCommit,
+      remoteCommit,
       changes
     });
   } catch (err) {
