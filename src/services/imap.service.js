@@ -246,6 +246,8 @@ async function crearProveedorSiNoExiste(client, nitEmisor, nombreEmisor, emailOr
   return { id: row.id, categoria_default_id: row.categoria_default_id };
 }
 
+const MAX_ATTACHMENT_MB = parseInt(process.env.MAX_ATTACHMENT_MB || '50');
+
 async function procesarCorreo(parsed, msgId) {
   const uploadDir = process.env.UPLOAD_DIR || './uploads/facturas';
   if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
@@ -257,7 +259,12 @@ async function procesarCorreo(parsed, msgId) {
   for (const att of parsed.attachments || []) {
     const filename = att.filename || '';
     const ext = path.extname(filename).toLowerCase();
-    
+
+    if (att.size && att.size > MAX_ATTACHMENT_MB * 1024 * 1024) {
+      console.log(`  [IMAP] Adjunto omitido por tamaño (${(att.size / 1024 / 1024).toFixed(1)}MB): ${filename}`);
+      continue;
+    }
+
     if (ext === '.zip' || filename.toLowerCase().includes('.zip')) {
       console.log(`  [IMAP] Procesando ZIP: ${filename}`);
       const archivos = extraerZip(att.content);
@@ -425,8 +432,8 @@ async function pollCorreo(rescanAll = false) {
         mensajes = mensajes.slice(-500);
         console.log(`[IMAP] Rescan: ${mensajes.length} mensajes (últimos 500)`);
       } else {
-        mensajes = await client.search({ all: true });
-        console.log(`[IMAP] Procesando todos los ${mensajes.length} mensaje(s) del buzón`);
+        mensajes = await client.search({ unseen: true });
+        console.log(`[IMAP] Procesando ${mensajes.length} mensajes nuevo(s) del buzón`);
       }
       
       if (mensajes.length === 0) {

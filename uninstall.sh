@@ -53,8 +53,10 @@ echo -e "${AZUL}── Cargando configuración del .env ────────
 
 ENV_FILE="$UNINSTALL_DIR/.env"
 if [[ -f "$ENV_FILE" ]]; then
+  set -a
   source <(grep -E '^[^#]*=' "$ENV_FILE" | sed 's/=\(.*\)/="\1"/')
-  DB_NAME="${DB_NAME:-docflow}"
+  set +a
+  DB_NAME="${DB_NAME:-docflow_db}"
   DB_USER="${DB_USER:-postgres}"
   DB_HOST="${DB_HOST:-localhost}"
   DB_PORT="${DB_PORT:-5432}"
@@ -62,7 +64,7 @@ if [[ -f "$ENV_FILE" ]]; then
   ok "Configuración cargada desde .env"
 else
   warn "No se encontró .env. Usando valores por defecto."
-  DB_NAME="docflow"
+  DB_NAME="docflow_db"
   DB_USER="postgres"
   DB_HOST="localhost"
   DB_PORT="5432"
@@ -118,14 +120,17 @@ echo ""
 echo -e "${AZUL}── Eliminando base de datos ──────────────────────${RESET}"
 
 if [[ "$DB_HOST" == "localhost" || "$DB_HOST" == "127.0.0.1" ]]; then
-  if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw "$DB_NAME"; then
+  DB_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" 2>/dev/null || echo "")
+  if [[ "$DB_EXISTS" == "1" ]]; then
     warn "Eliminando base de datos '$DB_NAME'..."
-    sudo -u postgres dropdb "$DB_NAME" 2>/dev/null && ok "Base de datos '$DB_NAME' eliminada" || warn "No se pudo eliminar la base de datos"
+    sudo -u postgres psql -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='$DB_NAME' AND pid <> pg_backend_pid();" 2>/dev/null || true
+    sudo -u postgres dropdb "$DB_NAME" 2>/dev/null && ok "Base de datos '$DB_NAME' eliminada" || err "No se pudo eliminar la base de datos '$DB_NAME'"
   else
     info "Base de datos '$DB_NAME' no existe"
   fi
 
-  if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw "${DB_NAME}_test"; then
+  DB_TEST_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}_test'" 2>/dev/null || echo "")
+  if [[ "$DB_TEST_EXISTS" == "1" ]]; then
     sudo -u postgres dropdb "${DB_NAME}_test" 2>/dev/null && ok "Base de datos test eliminada" || true
   fi
 else
@@ -135,12 +140,12 @@ else
     if [[ "$DB_EXISTS" == "1" ]]; then
       warn "Eliminando base de datos remota '$DB_NAME'..."
       PGPASSWORD="$DB_PASSWORD" dropdb -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" "$DB_NAME" \
-        && ok "Base de datos '$DB_NAME' eliminada" || warn "No se pudo eliminar la base de datos"
+        && ok "Base de datos '$DB_NAME' eliminada" || err "No se pudo eliminar la base de datos remota '$DB_NAME'"
     else
-      info "Base de datos '$DB_NAME' no existe"
+      info "Base de datos '$DB_NAME' no existe en el host remoto"
     fi
   else
-    warn "No hay contraseña de BD. No se puede eliminar base de datos remota."
+    err "No hay contraseña de BD configurada. No se puede eliminar la base de datos remota."
   fi
 fi
 
@@ -149,7 +154,6 @@ echo ""
 echo -e "${AZUL}── Eliminando archivos ──────────────────────────${RESET}"
 
 if [[ -d "$UNINSTALL_DIR" ]]; then
-  # Hacer backup de logs antes de eliminar si existen
   if [[ -d "$UNINSTALL_DIR/logs" ]] && [[ -n "$(ls -A "$UNINSTALL_DIR/logs" 2>/dev/null)" ]]; then
     LOGS_BACKUP="$HOME/docflow_logs_$(date +%Y%m%d_%H%M%S)"
     cp -r "$UNINSTALL_DIR/logs" "$LOGS_BACKUP"
